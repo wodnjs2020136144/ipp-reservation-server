@@ -48,9 +48,7 @@ app.get('/api/reservations', async (req, res) => {
     return res.json({ message: '일요일 지진 VR 불가', data: [] });
 
   try {
-    console.log(`⏳ [${type}] ${url} 요청 시작`);
-    const { data: html } = await axios.get(url, { timeout: 30000 });
-    console.log(`✅ [${type}] 응답 수신 완료`);
+    const { data: html } = await axios.get(url, { timeout: 15000 });
     const $ = cheerio.load(html);
     const result = [];
 
