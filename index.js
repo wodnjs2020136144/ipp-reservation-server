@@ -49,7 +49,16 @@ app.get('/api/reservations', async (req, res) => {
 
   try {
     console.log(`⏳ [${type}] ${url} 요청 시작`);
-    const { data: html } = await axios.get(url, { timeout: 30000 });
+    const resData = await axios.get(url, {
+      timeout: 30000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; IPPbot/1.0)',
+      },
+    });
+    const html = resData.data;
+    if (typeof html !== 'string' || !html.includes('<html')) {
+      throw new Error('예상과 다른 응답 형식');
+    }
     console.log(`✅ [${type}] 응답 수신 완료`);
     const $ = cheerio.load(html);
     const result = [];
