@@ -7,6 +7,6 @@
     "puppeteer": "^24.11.2"
   },
   "scripts": {
-    "dev": "nodemon index.js"
+    "start": "node index.js"
   }
 }
