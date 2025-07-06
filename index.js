@@ -88,3 +88,8 @@ app.get('/api/reservations', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ 예약 서버 실행 중: http://localhost:${PORT}`);
 });
+
+// 헬스체크 및 루트 경로
+app.get('/', (_, res) => {
+  res.send('서버가 정상적으로 실행 중입니다.');
+});
