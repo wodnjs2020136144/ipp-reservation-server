@@ -52,8 +52,11 @@ app.get('/api/reservations', async (req, res) => {
     const resData = await axios.get(url, {
       timeout: 30000,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; IPPbot/1.0)',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml',
       },
+      maxRedirects: 5,
     });
     const html = resData.data;
     if (typeof html !== 'string' || !html.includes('<html')) {
