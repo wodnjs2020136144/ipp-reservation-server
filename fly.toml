@@ -1,0 +1,8 @@
+app = "ipp-reservation-server"
+primary_region = "icn"
+
+[http_service]
+  internal_port = 4000        # index.js에서 listen 하는 포트
+  auto_stop_machines = true
+  auto_start_machines = true
+  processes = ["app"]
