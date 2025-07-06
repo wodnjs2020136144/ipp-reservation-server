@@ -32,15 +32,9 @@ app.get('/api/reservations', async (req, res) => {
   if (!url) return res.status(400).json({ error: 'invalid type' });
 
   // 오늘 날짜 정보 (KST 그대로)
-  const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+  const today = new Date();
   const todayDay = today.getDay();   // 0 일 ~ 6 토
   const todayDate = today.getDate(); // 1 ~ 31
-
-  console.log('📅 [서버 날짜 정보]');
-  console.log('ISO:', today.toISOString());
-  console.log('KST 날짜:', today.toLocaleDateString('ko-KR'));
-  console.log('요일:', todayDay, '(0=일, 1=월, ..., 6=토)');
-  console.log('오늘 날짜:', todayDate);
 
   // 휴무 조건
   if (todayDay === 1) return res.json({ message: '월요일 휴관', data: [] });
@@ -55,7 +49,6 @@ app.get('/api/reservations', async (req, res) => {
     // 달력의 모든 <td> 순회
     $('td').each((_, td) => {
       const dateText = $(td).find('span.day').first().text().trim(); // 날짜 숫자
-      console.log('td 셀 날짜:', dateText);
       const cellDate = parseInt(dateText, 10);
       if (cellDate !== todayDate) return; // 오늘이 아니면 skip
 
@@ -85,7 +78,6 @@ app.get('/api/reservations', async (req, res) => {
         });
     });
 
-    console.log(`🔍 ${type} 최종 파싱 결과`, result);
     res.json({ message: '정상 조회', data: result });
   } catch (err) {
     console.error('crawl fail:', err.message);
