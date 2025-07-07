@@ -10,6 +10,13 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const cheerio = require('cheerio');
+// --- timezone (KST) setup ------------------------------
+const dayjs = require('dayjs');
+const utc = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
+dayjs.extend(utc);
+dayjs.extend(timezone);
+// -------------------------------------------------------
 
 const app = express();
 const PORT = 4000;
@@ -31,10 +38,10 @@ app.get('/api/reservations', async (req, res) => {
   const url = reservationMap[type];
   if (!url) return res.status(400).json({ error: 'invalid type' });
 
-  // 오늘 날짜 정보 (KST 그대로)
-  const today = new Date();
-  const todayDay = today.getDay();   // 0 일 ~ 6 토
-  const todayDate = today.getDate(); // 1 ~ 31
+  // 오늘 날짜 정보 (KST 기준)
+  const todayKST = dayjs().tz('Asia/Seoul');
+  const todayDay = todayKST.day();   // 0(일) ~ 6(토)
+  const todayDate = todayKST.date(); // 1 ~ 31
 
   // 휴무 조건
   if (todayDay === 1) return res.json({ message: '월요일 휴관', data: [] });
