@@ -9,6 +9,15 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+// axios 인스턴스 – 30 초 타임아웃 + 모바일 UA
+const axiosClient = axios.create({
+  timeout: 30000,
+  headers: {
+    'User-Agent':
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+    'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8',
+  },
+});
 const cheerio = require('cheerio');
 // --- timezone (KST) setup ------------------------------
 const dayjs = require('dayjs');
@@ -49,7 +58,7 @@ app.get('/api/reservations', async (req, res) => {
     return res.json({ message: '일요일 지진 VR 불가', data: [] });
 
   try {
-    const { data: html } = await axios.get(url, { timeout: 15000 });
+    const { data: html } = await axiosClient.get(url);
     const $ = cheerio.load(html);
     const result = [];
 
