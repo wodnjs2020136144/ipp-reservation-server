@@ -58,7 +58,14 @@ app.get('/api/reservations', async (req, res) => {
     return res.json({ message: '일요일 지진 VR 불가', data: [] });
 
   try {
-    const { data: html } = await axiosClient.get(url);
+    // --- axios 요청 & 디버깅 로그 ------------------------
+    const resp = await axiosClient.get(url);
+    console.log('[crawl]', type, 'status:', resp.status, 'length:',
+      resp.headers['content-length'] || 'n/a',
+      resp.headers.location ? 'redirect-> ' + resp.headers.location : '');
+    const html = resp.data;
+    // -----------------------------------------------------
+
     const $ = cheerio.load(html);
     const result = [];
 
@@ -96,7 +103,10 @@ app.get('/api/reservations', async (req, res) => {
 
     res.json({ message: '정상 조회', data: result });
   } catch (err) {
-    console.error('crawl fail:', err.message);
+    console.error('[crawl error]', type,
+      'code:', err.code,
+      'status:', err.response?.status,
+      'detail:', err.message);
     res.status(500).json({ error: 'crawl fail', detail: err.message });
   }
 });
