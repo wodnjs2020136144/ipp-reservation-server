@@ -123,6 +123,33 @@ app.get('/api/reservations', async (req, res) => {
         });
     });
 
+    /* ---------- Fallback: 일(日)‑단위 목록 뷰 ---------- */
+    if (result.length === 0) {
+      $('a.btn-reserve, a.btn-closed, button.btn-reserve, button.btn-closed').each((k, el) => {
+        const raw = $(el).text().trim();            // 예: '1회차 (15:10 ~ 15:40/유아) (0/6)'
+        console.log('[slot‑list]', k, raw);
+
+        // 시작 시각
+        const time = (raw.match(/\d{1,2}:\d{2}/) || [])[0] || '';
+
+        // (사용/전체) 또는 '신청마감' 추출
+        let status = '', available = null;
+        const nums = raw.match(/\((\d+)\/(\d+)\)/);
+        if (nums) {
+          const used  = Number(nums[1]);
+          const total = Number(nums[2]);
+          status      = used === total ? '신청마감' : '예약가능';
+          available   = total - used;
+        } else {
+          status    = /마감/.test(raw) ? '신청마감' : '예약가능';
+          available = 0;
+        }
+
+        result.push({ time, status, available });
+      });
+    }
+    /* ---------- /fallback ---------- */
+
     res.json({ message: '정상 조회', data: result });
   } catch (err) {
     console.error('[crawl error]', type,
