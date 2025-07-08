@@ -83,7 +83,7 @@ app.get('/api/reservations', async (req, res) => {
       const cellDate = parseInt(dateText, 10);
 
       // 디버깅 로그: 각 셀의 날짜 출력
-      console.debug('[td]', i, 'dateText=', dateText || '—');
+      console.log('[td]', i, 'dateText=', dateText || '—');
 
       if (cellDate !== todayDate) return; // 오늘이 아니면 skip
 
@@ -101,7 +101,7 @@ app.get('/api/reservations', async (req, res) => {
           const raw = $(el).text().trim(); // 예: "10:10 ~ 10:40/초등 (신청마감)"
 
           // 디버깅 로그: 회차 raw 출력
-          console.debug('[slot]', j, raw);
+          console.log('[slot]', j, raw);
 
           // 시간 추출 (시작 시간만)
           const time = (raw.match(/^\d{1,2}:\d{2}/) || [])[0] || '';
