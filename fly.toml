@@ -1,0 +1,25 @@
+# fly.toml — Fly.io config for ipp-reservation-server
+# NOTE: This file is mirrored here only for reference.
+# The actual deployment uses the copy inside ipp-reservation-server/.
+
+app = "ipp-reservation-server"
+primary_region = "nrt"
+
+[env]
+  TZ = "Asia/Seoul"
+
+[[services]]
+  internal_port = 4000
+  protocol      = "tcp"
+
+  auto_stop_machines   = true
+  auto_start_machines  = true
+  min_machines_running = 0
+
+  [[services.ports]]
+    port     = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port     = 443
+    handlers = ["tls", "http"]
