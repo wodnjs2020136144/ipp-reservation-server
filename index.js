@@ -109,17 +109,22 @@ app.get('/api/reservations', async (req, res) => {
           // 괄호 안의 상태·인원
           const statusRaw = (raw.match(/\((.*?)\)$/) || [])[1] || '';
           let status = '', available = null;
+          let total = null;
+          let used = null;
 
           if (statusRaw === '신청마감') {
             status = '신청마감';
             available = 0;
+            total = null;  // unknown
           } else if (/^\d+\/\d+$/.test(statusRaw)) {
-            const [used, total] = statusRaw.split('/').map(Number);
-            status = '예약가능';
+            const [usedStr, totalStr] = statusRaw.split('/').map(Number);
+            used    = usedStr;
+            total   = totalStr;
+            status  = used === total ? '신청마감' : '예약가능';
             available = total - used;
           }
 
-          result.push({ time, status, available });
+          result.push({ time, status, available, total });
         });
     });
 
@@ -134,18 +139,20 @@ app.get('/api/reservations', async (req, res) => {
 
         // (사용/전체) 또는 '신청마감' 추출
         let status = '', available = null;
+        let total = null;
+        let used = null;
         const nums = raw.match(/\((\d+)\/(\d+)\)/);
         if (nums) {
-          const used  = Number(nums[1]);
-          const total = Number(nums[2]);
-          status      = used === total ? '신청마감' : '예약가능';
-          available   = total - used;
+          used  = Number(nums[1]);
+          total = Number(nums[2]);
+          status = used === total ? '신청마감' : '예약가능';
+          available = total - used;
         } else {
           status    = /마감/.test(raw) ? '신청마감' : '예약가능';
           available = 0;
         }
 
-        result.push({ time, status, available });
+        result.push({ time, status, available, total });
       });
     }
     /* ---------- /fallback ---------- */
