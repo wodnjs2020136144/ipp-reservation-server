@@ -1,5 +1,3 @@
-# 프로젝트 루트(ipp-reservation-server)에서 실행
-cat > fly.toml <<'EOF'
 # fly.toml — Fly.io app configuration for ipp-reservation-server
 # Docs: https://fly.io/docs/reference/configuration/
 
@@ -32,7 +30,3 @@ primary_region = 'nrt'           # Tokyo region (low latency to Korea)
   cpu_kind = 'shared'
   cpus = 1
   memory = '256mb'
-EOF
-
-# 내용 확인
-cat fly.toml
