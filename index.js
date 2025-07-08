@@ -6,9 +6,12 @@
 // 사용: nodemon index.js 또는 node index.js
 // 의존성: npm i express cors axios cheerio
 
+const fs = require('fs'); //임시 저장용 매개변수
+
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+fs.writeFileSync(`/tmp/${type}.html`, html);   // 임시 저장
 // axios 인스턴스 – 30 초 타임아웃 + 모바일 UA
 const axiosClient = axios.create({
   timeout: 30000,
