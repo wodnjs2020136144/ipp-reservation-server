@@ -11,7 +11,6 @@ const fs = require('fs'); //임시 저장용 매개변수
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-fs.writeFileSync(`/tmp/${type}.html`, html);   // 임시 저장
 // axios 인스턴스 – 30 초 타임아웃 + 모바일 UA
 const axiosClient = axios.create({
   timeout: 30000,
@@ -67,6 +66,12 @@ app.get('/api/reservations', async (req, res) => {
       resp.headers['content-length'] || 'n/a',
       resp.headers.location ? 'redirect-> ' + resp.headers.location : '');
     const html = resp.data;
+    // HTML 임시 저장 (디버깅용)
+    try {
+      fs.writeFileSync(`/tmp/${type}.html`, html);
+    } catch (e) {
+      console.warn('debug file write failed:', e.message);
+    }
     // -----------------------------------------------------
 
     const $ = cheerio.load(html);
