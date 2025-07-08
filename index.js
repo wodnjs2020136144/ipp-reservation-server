@@ -78,16 +78,30 @@ app.get('/api/reservations', async (req, res) => {
     const result = [];
 
     // 달력의 모든 <td> 순회
-    $('td').each((_, td) => {
-      const dateText = $(td).find('span.day').first().text().trim(); // 날짜 숫자
+    $('table.calendar-table td').each((i, td) => {
+      const dateText = $(td).find('span.day').text().trim(); // 날짜 숫자
       const cellDate = parseInt(dateText, 10);
+
+      // 디버깅 로그: 각 셀의 날짜 출력
+      console.debug('[td]', i, 'dateText=', dateText || '—');
+
       if (cellDate !== todayDate) return; // 오늘이 아니면 skip
+
+      // ― 오늘 날짜 셀 발견 → HTML 스니펫 저장
+      try {
+        fs.writeFileSync(`/tmp/${type}-today.html`, $(td).html());
+      } catch (e) {
+        console.warn('debug today-cell write failed:', e.message);
+      }
 
       // 오늘 셀 안의 각 회차 링크 파싱
       $(td)
-        .find('a.word-wrap')
-        .each((_, el) => {
+        .find('a.word-wrap, button.word-wrap') // 버튼 태그도 대응
+        .each((j, el) => {
           const raw = $(el).text().trim(); // 예: "10:10 ~ 10:40/초등 (신청마감)"
+
+          // 디버깅 로그: 회차 raw 출력
+          console.debug('[slot]', j, raw);
 
           // 시간 추출 (시작 시간만)
           const time = (raw.match(/^\d{1,2}:\d{2}/) || [])[0] || '';
