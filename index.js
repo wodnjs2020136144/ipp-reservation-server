@@ -22,6 +22,7 @@ const axiosClient = axios.create({
   },
 });
 const cheerio = require('cheerio');
+const app = express();
 
 app.use(express.json());
 
@@ -105,8 +106,7 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 // -------------------------------------------------------
 
-const app = express();
-const PORT = 4000;
+const PORT = process.env.PORT || 4000;
 app.use(cors());
 
 /** 예약 종류별 달력 URL */
