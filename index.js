@@ -11,6 +11,7 @@ const fs = require('fs'); //임시 저장용 매개변수
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const { Expo } = require('expo-server-sdk');
 // axios 인스턴스 – 30 초 타임아웃 + 모바일 UA
 const axiosClient = axios.create({
   timeout: 30000,
@@ -21,6 +22,81 @@ const axiosClient = axios.create({
   },
 });
 const cheerio = require('cheerio');
+
+app.use(express.json());
+
+// ---- Push notification setup ----
+const expo = new Expo();
+let pushTokens = new Set();
+let prevSlots = {}; // { "ai-09:00~10:00": { status, available, total } }
+
+// Load cached tokens & prevSlots from disk if available
+try {
+  const rawTokens = fs.readFileSync('./tokens.json', 'utf8');
+  pushTokens = new Set(JSON.parse(rawTokens));
+} catch (e) {
+  // ignore
+}
+try {
+  const rawPrev = fs.readFileSync('./prevSlots.json', 'utf8');
+  prevSlots = JSON.parse(rawPrev);
+} catch (e) {
+  // ignore
+}
+
+const saveTokens = () => {
+  try { fs.writeFileSync('./tokens.json', JSON.stringify([...pushTokens])); } catch (e) {}
+};
+const savePrevSlots = () => {
+  try { fs.writeFileSync('./prevSlots.json', JSON.stringify(prevSlots)); } catch (e) {}
+};
+
+const makeKey = (type, time) => `${type}-${time}`;
+
+async function sendPushMessages(messages) {
+  const chunks = expo.chunkPushNotifications(messages);
+  for (const chunk of chunks) {
+    try {
+      await expo.sendPushNotificationsAsync(chunk);
+    } catch (err) {
+      console.error('push error:', err.message);
+    }
+  }
+}
+
+function diffAndNotify(type, slots) {
+  const changed = [];
+  slots.forEach(slot => {
+    const key = makeKey(type, slot.time);
+    const prev = prevSlots[key];
+    if (!prev || prev.available !== slot.available || prev.total !== slot.total || prev.status !== slot.status) {
+      // Save change snapshot
+      prevSlots[key] = { status: slot.status, available: slot.available, total: slot.total };
+      // Only notify when there was a previous snapshot (skip first crawl spam)
+      if (prev) {
+        changed.push({ key, slot, prev });
+      }
+    }
+  });
+  if (changed.length === 0 || pushTokens.size === 0) return;
+
+  const bodyLines = changed.map(c => {
+    return `${c.key.split('-')[0]} ${c.slot.time}: ${c.prev.available ?? '-'}→${c.slot.available ?? '-'} / ${c.slot.total ?? '-'}`;
+  });
+
+  const messages = [...pushTokens]
+    .filter(token => Expo.isExpoPushToken(token))
+    .map(token => ({
+      to: token,
+      sound: 'default',
+      title: '예약 인원 변경',
+      body: bodyLines.join('\n'),
+    }));
+
+  sendPushMessages(messages);
+  savePrevSlots();
+}
+// ---- /Push notification setup ----
 // --- timezone (KST) setup ------------------------------
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
@@ -157,6 +233,8 @@ app.get('/api/reservations', async (req, res) => {
     }
     /* ---------- /fallback ---------- */
 
+    // Notify if changed
+    diffAndNotify(type, result);
     res.json({ message: '정상 조회', data: result });
   } catch (err) {
     console.error('[crawl error]', type,
@@ -165,6 +243,32 @@ app.get('/api/reservations', async (req, res) => {
       'detail:', err.message);
     res.status(500).json({ error: 'crawl fail', detail: err.message });
   }
+});
+
+
+/**
+ * POST /api/push-token { token: string }
+ */
+app.post('/api/push-token', (req, res) => {
+  const { token } = req.body || {};
+  if (!token) return res.status(400).json({ error: 'no token' });
+  if (!Expo.isExpoPushToken(token)) {
+    return res.status(400).json({ error: 'invalid expo token' });
+  }
+  pushTokens.add(token);
+  saveTokens();
+  res.json({ ok: true });
+});
+
+/**
+ * DELETE /api/push-token { token: string }
+ */
+app.delete('/api/push-token', (req, res) => {
+  const { token } = req.body || {};
+  if (!token) return res.status(400).json({ error: 'no token' });
+  pushTokens.delete(token);
+  saveTokens();
+  res.json({ ok: true });
 });
 
 app.listen(PORT, () => {
