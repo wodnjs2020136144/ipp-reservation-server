@@ -8,9 +8,9 @@ const cors = require('cors');
 const axios = require('axios');
 const { Expo } = require('expo-server-sdk');
 const cron = require('node-cron');
-// axios 인스턴스 – 60 초 타임아웃 + 모바일 UA (기존 30s → 60s)
+// axios 인스턴스 – 30 초 타임아웃 + 모바일 UA
 const axiosClient = axios.create({
-  timeout: 60000, // 60s (기존 30s → 60s)
+  timeout: 30000,
   headers: {
     'User-Agent':
       'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
@@ -66,14 +66,12 @@ const savePrevSlots = () => {
 const makeKey = (type, time) => `${type}-${time}`;
 
 async function sendPushMessages(messages) {
-  console.log('[push] preparing to send', messages.length, 'messages');
   const chunks = expo.chunkPushNotifications(messages);
   for (const chunk of chunks) {
     try {
-      const tickets = await expo.sendPushNotificationsAsync(chunk);
-      console.log('[push] tickets', JSON.stringify(tickets));
+      await expo.sendPushNotificationsAsync(chunk);
     } catch (err) {
-      console.error('[push error] send chunk failed:', err.message);
+      console.error('push error:', err.message);
     }
   }
 }
@@ -92,7 +90,6 @@ function diffAndNotify(type, slots) {
       }
     }
   });
-  console.log('[push] diff result - changed:', changed.length, 'tokens:', pushTokens.size);
   if (changed.length === 0 || pushTokens.size === 0) return;
 
   const bodyLines = changed.map(c => {
@@ -108,7 +105,6 @@ function diffAndNotify(type, slots) {
       body: bodyLines.join('\n'),
     }));
 
-  console.log('[push] sending to', messages.length, 'valid tokens');
   sendPushMessages(messages);
   savePrevSlots();
 }
@@ -301,34 +297,8 @@ app.delete('/api/push-token', (req, res) => {
   res.json({ ok: true });
 });
 
-/**
- * POST /api/test-push { title?: string, body?: string }
- * Sends a test notification to all saved tokens.
- */
-app.post('/api/test-push', async (req, res) => {
-  try {
-    const { title = '테스트 푸시', body = '서버에서 보낸 테스트 메시지' } = req.body || {};
-    if (pushTokens.size === 0) {
-      return res.status(400).json({ error: 'no tokens registered' });
-    }
-    const messages = [...pushTokens]
-      .filter(token => Expo.isExpoPushToken(token))
-      .map(token => ({ to: token, sound: 'default', title, body }));
-    console.log('[push-test] sending', messages.length, 'messages');
-    await sendPushMessages(messages);
-    return res.json({ ok: true, count: messages.length });
-  } catch (e) {
-    console.error('[push-test error]', e);
-    return res.status(500).json({ error: e.message });
-  }
-});
-
-// Prevent overlapping cron executions
-let cronRunning = false;
 // ---- 주기 크롤링 & 푸시 (영업시간만: 화~일 09:00~16:10 KST, 1분 간격) ----
 cron.schedule('* * * * *', async () => {
-  if (cronRunning) return;          // skip if previous run still in progress
-  cronRunning = true;
   try {
     console.log('[cron] tick', new Date().toISOString());
     const now = dayjs().tz('Asia/Seoul');
@@ -347,8 +317,6 @@ cron.schedule('* * * * *', async () => {
     }
   } catch (err) {
     console.error('cron crawl error', err.message);
-  } finally {
-    cronRunning = false;
   }
 }, { timezone: 'Asia/Seoul' });
 // --------------------------------------
