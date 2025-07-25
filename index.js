@@ -42,10 +42,10 @@ try {
 }
 
 const saveTokens = () => {
-  try { fs.writeFileSync('./tokens.json', JSON.stringify([...pushTokens])); } catch (e) {}
+  try { fs.writeFileSync('./tokens.json', JSON.stringify([...pushTokens])); } catch (e) { }
 };
 const savePrevSlots = () => {
-  try { fs.writeFileSync('./prevSlots.json', JSON.stringify(prevSlots)); } catch (e) {}
+  try { fs.writeFileSync('./prevSlots.json', JSON.stringify(prevSlots)); } catch (e) { }
 };
 
 const makeKey = (type, time) => `${type}-${time}`;
@@ -103,6 +103,7 @@ dayjs.extend(timezone);
 // -------------------------------------------------------
 
 const PORT = process.env.PORT || 4000;
+const LOCAL_BASE = `http://127.0.0.1:${PORT}`;
 app.use(cors());
 
 /** 예약 종류별 달력 URL */
@@ -190,9 +191,9 @@ app.get('/api/reservations', async (req, res) => {
             total = null;  // unknown
           } else if (/^\d+\/\d+$/.test(statusRaw)) {
             const [usedStr, totalStr] = statusRaw.split('/').map(Number);
-            used    = usedStr;
-            total   = totalStr;
-            status  = used === total ? '신청마감' : '예약가능';
+            used = usedStr;
+            total = totalStr;
+            status = used === total ? '신청마감' : '예약가능';
             available = total - used;
           }
 
@@ -215,12 +216,12 @@ app.get('/api/reservations', async (req, res) => {
         let used = null;
         const nums = raw.match(/\((\d+)\/(\d+)\)/);
         if (nums) {
-          used  = Number(nums[1]);
+          used = Number(nums[1]);
           total = Number(nums[2]);
           status = used === total ? '신청마감' : '예약가능';
           available = total - used;
         } else {
-          status    = /마감/.test(raw) ? '신청마감' : '예약가능';
+          status = /마감/.test(raw) ? '신청마감' : '예약가능';
           available = 0;
         }
 
@@ -270,6 +271,7 @@ app.delete('/api/push-token', (req, res) => {
 // ---- 주기 크롤링 & 푸시 (영업시간만: 화~일 09:00~16:10 KST, 1분 간격) ----
 cron.schedule('* * * * *', async () => {
   try {
+    console.log('[cron] tick', new Date().toISOString());
     const now = dayjs().tz('Asia/Seoul');
     const dow = now.day(); // 0=일 ~ 6=토, 1=월요일
     if (dow === 1) return; // 월요일 제외
