@@ -17,21 +17,6 @@ const axiosClient = axios.create({
     'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8',
   },
 });
-
-// --- simple retry wrapper for axiosClient.get ---
-async function fetchHtmlWithRetry(url, maxRetry = 3) {
-  let lastErr;
-  for (let i = 0; i < maxRetry; i++) {
-    try {
-      return await axiosClient.get(url);
-    } catch (err) {
-      lastErr = err;
-      console.warn('[retry]', i + 1, 'fail', err.code || err.message);
-      await new Promise((r) => setTimeout(r, 1000 * (i + 1))); // backoff 1s,2s,3s
-    }
-  }
-  throw lastErr;
-}
 const cheerio = require('cheerio');
 const app = express();
 
@@ -149,7 +134,7 @@ app.get('/api/reservations', async (req, res) => {
 
   try {
     // --- axios 요청 & 디버깅 로그 ------------------------
-    const resp = await fetchHtmlWithRetry(url, 3);
+    const resp = await axiosClient.get(url);
     console.log('[crawl]', type, 'status:', resp.status, 'length:',
       resp.headers['content-length'] || 'n/a',
       resp.headers.location ? 'redirect-> ' + resp.headers.location : '');
@@ -253,21 +238,7 @@ app.get('/api/reservations', async (req, res) => {
       'code:', err.code,
       'status:', err.response?.status,
       'detail:', err.message);
-
-    // Fallback: return last known snapshot if available (to avoid 500 for clients)
-    const fallback = Object.entries(prevSlots)
-      .filter(([k]) => k.startsWith(`${type}-`))
-      .map(([k, v]) => ({
-        time: k.split('-')[1],
-        status: v.status,
-        available: v.available,
-        total: v.total,
-      }));
-    if (fallback.length > 0) {
-      return res.json({ message: 'fallback(prev data)', data: fallback });
-    }
-
-    return res.status(500).json({ error: 'crawl fail', detail: err.message });
+    res.status(500).json({ error: 'crawl fail', detail: err.message });
   }
 });
 
