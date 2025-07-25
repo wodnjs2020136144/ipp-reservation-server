@@ -2,12 +2,16 @@
 // 지원: 인공지능로봇배움터(ai), 지진 VR(earthquake), 드론 VR(drone)
 // 사용: nodemon index.js 또는 node index.js
 // 의존성: npm i express cors axios cheerio
-const fs = require('fs');
+
+// 사용: nodemon index.js 또는 node index.js
+// 의존성: npm i express cors axios cheerio
+
+const fs = require('fs'); //임시 저장용 매개변수
+
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const { Expo } = require('expo-server-sdk');
-const cron = require('node-cron');
 // axios 인스턴스 – 30 초 타임아웃 + 모바일 UA
 const axiosClient = axios.create({
   timeout: 30000,
@@ -267,28 +271,6 @@ app.delete('/api/push-token', (req, res) => {
   res.json({ ok: true });
 });
 
-// ---- 주기 크롤링 & 푸시 (영업시간만: 화~일 09:00~16:10 KST, 1분 간격) ----
-cron.schedule('* * * * *', async () => {
-  try {
-    const now = dayjs().tz('Asia/Seoul');
-    const dow = now.day(); // 0=일 ~ 6=토, 1=월요일
-    if (dow === 1) return; // 월요일 제외
-
-    const hour = now.hour();
-    const minute = now.minute();
-    // 허용 시간대: 09:00 ~ 16:10
-    if (hour < 9 || hour > 16) return;
-    if (hour === 16 && minute > 10) return;
-
-    const types = ['ai', 'earthquake', 'drone'];
-    for (const type of types) {
-      await axios.get(`${LOCAL_BASE}/api/reservations?type=${type}`);
-    }
-  } catch (err) {
-    console.error('cron crawl error', err.message);
-  }
-}, { timezone: 'Asia/Seoul' });
-// --------------------------------------
 app.listen(PORT, () => {
   console.log(`✅ 예약 서버 실행 중: http://localhost:${PORT}`);
 });
