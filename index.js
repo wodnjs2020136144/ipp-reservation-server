@@ -11,9 +11,9 @@ const fs = require('fs'); //임시 저장용 매개변수
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-// axios 인스턴스 – 30 초 타임아웃 + 모바일 UA
+// axios 인스턴스 – 60 초 타임아웃 + 모바일 UA
 const axiosClient = axios.create({
-  timeout: 30000,
+  timeout: 60000,
   headers: {
     'User-Agent':
       'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
@@ -21,6 +21,22 @@ const axiosClient = axios.create({
   },
 });
 const cheerio = require('cheerio');
+
+// --- simple retry wrapper for axiosClient.get ---
+async function fetchHtmlWithRetry(url, maxRetry = 3) {
+  let lastErr;
+  for (let i = 0; i < maxRetry; i++) {
+    try {
+      return await axiosClient.get(url);
+    } catch (err) {
+      lastErr = err;
+      console.warn('[retry]', i + 1, 'fail', err.code || err.message);
+      await new Promise(r => setTimeout(r, 1000 * (i + 1))); // 1s → 2s → 3s
+    }
+  }
+  throw lastErr;
+}
+
 // --- timezone (KST) setup ------------------------------
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
@@ -61,7 +77,7 @@ app.get('/api/reservations', async (req, res) => {
 
   try {
     // --- axios 요청 & 디버깅 로그 ------------------------
-    const resp = await axiosClient.get(url);
+    const resp = await fetchHtmlWithRetry(url, 3);
     console.log('[crawl]', type, 'status:', resp.status, 'length:',
       resp.headers['content-length'] || 'n/a',
       resp.headers.location ? 'redirect-> ' + resp.headers.location : '');
@@ -118,9 +134,9 @@ app.get('/api/reservations', async (req, res) => {
             total = null;  // unknown
           } else if (/^\d+\/\d+$/.test(statusRaw)) {
             const [usedStr, totalStr] = statusRaw.split('/').map(Number);
-            used    = usedStr;
-            total   = totalStr;
-            status  = used === total ? '신청마감' : '예약가능';
+            used = usedStr;
+            total = totalStr;
+            status = used === total ? '신청마감' : '예약가능';
             available = total - used;
           }
 
@@ -143,12 +159,12 @@ app.get('/api/reservations', async (req, res) => {
         let used = null;
         const nums = raw.match(/\((\d+)\/(\d+)\)/);
         if (nums) {
-          used  = Number(nums[1]);
+          used = Number(nums[1]);
           total = Number(nums[2]);
           status = used === total ? '신청마감' : '예약가능';
           available = total - used;
         } else {
-          status    = /마감/.test(raw) ? '신청마감' : '예약가능';
+          status = /마감/.test(raw) ? '신청마감' : '예약가능';
           available = 0;
         }
 
