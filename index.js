@@ -20,7 +20,22 @@ const axiosClient = axios.create({
     'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8',
   },
 });
+
 const cheerio = require('cheerio');
+
+// ---- snapshot store: 마지막 예약(잔여/정원) 보존용 -----------------
+let prevSlots = {};
+try {
+  prevSlots = JSON.parse(fs.readFileSync('./snapshots.json', 'utf8'));
+} catch (_) {}
+
+const saveSnapshots = () => {
+  try {
+    fs.writeFileSync('./snapshots.json', JSON.stringify(prevSlots));
+  } catch (_) {}
+};
+const makeKey = (type, time) => `${type}-${time}`;
+// -----------------------------------------------------------------
 
 // --- simple retry wrapper for axiosClient.get ---
 async function fetchHtmlWithRetry(url, maxRetry = 3) {
@@ -126,18 +141,35 @@ app.get('/api/reservations', async (req, res) => {
           const statusRaw = (raw.match(/\((.*?)\)$/) || [])[1] || '';
           let status = '', available = null;
           let total = null;
-          let used = null;
 
-          if (statusRaw === '신청마감') {
-            status = '신청마감';
-            available = 0;
-            total = null;  // unknown
-          } else if (/^\d+\/\d+$/.test(statusRaw)) {
+          const key = makeKey(type, time);
+
+          if (/^\d+\/\d+$/.test(statusRaw)) {
+            // 형태: 3/6  (사용/전체)
             const [usedStr, totalStr] = statusRaw.split('/').map(Number);
-            used = usedStr;
+            const used = usedStr;
             total = totalStr;
-            status = used === total ? '신청마감' : '예약가능';
-            available = total - used;
+            if (used === total) {
+              status = '정원마감';
+              available = 0;
+            } else {
+              status = '예약가능';
+              available = total - used;
+            }
+            // 숫자 정보가 있으면 스냅샷 갱신
+            prevSlots[key] = { available, total };
+          } else {
+            // '신청마감' = 시간마감 또는 정원마감(잔여 보존)
+            const prev = prevSlots[key];
+            if (prev && prev.total != null) {
+              status = prev.available === 0 ? '정원마감' : '시간마감';
+              available = prev.available;
+              total = prev.total;
+            } else {
+              status = '시간마감';
+              available = 0;
+              total = null;
+            }
           }
 
           result.push({ time, status, available, total });
@@ -156,16 +188,34 @@ app.get('/api/reservations', async (req, res) => {
         // (사용/전체) 또는 '신청마감' 추출
         let status = '', available = null;
         let total = null;
-        let used = null;
         const nums = raw.match(/\((\d+)\/(\d+)\)/);
         if (nums) {
-          used = Number(nums[1]);
-          total = Number(nums[2]);
-          status = used === total ? '신청마감' : '예약가능';
-          available = total - used;
+          const used = Number(nums[1]);
+          const totalNum = Number(nums[2]);
+          total = totalNum;
+          if (used === totalNum) {
+            status = '정원마감';
+            available = 0;
+          } else {
+            status = '예약가능';
+            available = totalNum - used;
+          }
+          // 스냅샷 갱신
+          const key = makeKey(type, time);
+          prevSlots[key] = { available, total };
         } else {
-          status = /마감/.test(raw) ? '신청마감' : '예약가능';
-          available = 0;
+          // 괄호 없는 '신청마감' => 시간마감
+          const key = makeKey(type, time);
+          const prev = prevSlots[key];
+          if (prev && prev.total != null) {
+            status = prev.available === 0 ? '정원마감' : '시간마감';
+            available = prev.available;
+            total = prev.total;
+          } else {
+            status = '시간마감';
+            available = 0;
+            total = null;
+          }
         }
 
         result.push({ time, status, available, total });
@@ -173,6 +223,7 @@ app.get('/api/reservations', async (req, res) => {
     }
     /* ---------- /fallback ---------- */
 
+    saveSnapshots();
     res.json({ message: '정상 조회', data: result });
   } catch (err) {
     console.error('[crawl error]', type,
