@@ -35,6 +35,8 @@ const saveSnapshots = () => {
   } catch (_) {}
 };
 const makeKey = (type, time) => `${type}-${time}`;
+// KST now (re‑usable)
+const nowKST = () => dayjs().tz('Asia/Seoul');
 // -----------------------------------------------------------------
 
 // --- simple retry wrapper for axiosClient.get ---
@@ -159,13 +161,26 @@ app.get('/api/reservations', async (req, res) => {
             // 숫자 정보가 있으면 스냅샷 갱신
             prevSlots[key] = { available, total };
           } else {
-            // '신청마감' = 시간마감 또는 정원마감(잔여 보존)
+            // '신청마감' = 시간마감 or 정원마감
             const prev = prevSlots[key];
+
+            // 슬롯 시작 시각 (오늘 날짜 + time)
+            const slotStart = dayjs.tz(
+              `${todayKST.format('YYYY-MM-DD')} ${time}`,
+              'YYYY-MM-DD HH:mm',
+              'Asia/Seoul'
+            );
+
+            const beforeStart = nowKST().isBefore(slotStart);
+
             if (prev && prev.total != null) {
-              status = prev.available === 0 ? '정원마감' : '시간마감';
+              // 숫자 스냅샷이 있으면 그대로 사용
               available = prev.available;
               total = prev.total;
+              status =
+                beforeStart && prev.available === 0 ? '정원마감' : '시간마감';
             } else {
+              // 정보가 없으면 시간마감으로만 표시
               status = '시간마감';
               available = 0;
               total = null;
@@ -204,13 +219,22 @@ app.get('/api/reservations', async (req, res) => {
           const key = makeKey(type, time);
           prevSlots[key] = { available, total };
         } else {
-          // 괄호 없는 '신청마감' => 시간마감
+          // 괄호 없는 '신청마감'
           const key = makeKey(type, time);
           const prev = prevSlots[key];
+
+          const slotStart = dayjs.tz(
+            `${todayKST.format('YYYY-MM-DD')} ${time}`,
+            'YYYY-MM-DD HH:mm',
+            'Asia/Seoul'
+          );
+          const beforeStart = nowKST().isBefore(slotStart);
+
           if (prev && prev.total != null) {
-            status = prev.available === 0 ? '정원마감' : '시간마감';
             available = prev.available;
             total = prev.total;
+            status =
+              beforeStart && prev.available === 0 ? '정원마감' : '시간마감';
           } else {
             status = '시간마감';
             available = 0;
