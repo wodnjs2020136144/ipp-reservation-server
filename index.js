@@ -164,15 +164,22 @@ app.get('/api/reservations', async (req, res) => {
             // '신청마감' = 시간마감 or 정원마감
             const prev = prevSlots[key];
 
-            // 슬롯 시작 시각 및 beforeStart 삭제
             if (prev && prev.total != null) {
               // 숫자 스냅샷이 있으면 그대로 사용
               available = prev.available;
               total = prev.total;
               status = prev.available === 0 ? '정원마감' : '시간마감';
             } else {
-              // 정보가 없으면 시간마감으로만 표시
-              status = '시간마감';
+              // 스냅샷이 없다 → 버튼이 바로 닫혀버린 경우.
+              // 시작 시각과 현재 시각을 비교해 추정
+              const slotStart = dayjs.tz(
+                `${todayKST.format('YYYY-MM-DD')} ${time}`,
+                'YYYY-MM-DD HH:mm',
+                'Asia/Seoul'
+              );
+              const beforeStart = nowKST().isBefore(slotStart);
+
+              status = beforeStart ? '정원마감' : '시간마감';
               available = 0;
               total = null;
             }
@@ -214,13 +221,19 @@ app.get('/api/reservations', async (req, res) => {
           const key = makeKey(type, time);
           const prev = prevSlots[key];
 
-          // slotStart 및 beforeStart 삭제
-          if (prev && prev.total != null) {
+          if (prev && prev.total !=null) {
             available = prev.available;
             total = prev.total;
             status = prev.available === 0 ? '정원마감' : '시간마감';
           } else {
-            status = '시간마감';
+            const slotStart = dayjs.tz(
+              `${todayKST.format('YYYY-MM-DD')} ${time}`,
+              'YYYY-MM-DD HH:mm',
+              'Asia/Seoul'
+            );
+            const beforeStart = nowKST().isBefore(slotStart);
+
+            status = beforeStart ? '정원마감' : '시간마감';
             available = 0;
             total = null;
           }
