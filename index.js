@@ -218,6 +218,7 @@ app.get('/api/reservations', async (req, res) => {
         let total = null;
         const nums = raw.match(/\((\d+)\/(\d+)\)/);
         if (nums) {
+          const key = makeKey(type, time);
           const used = Number(nums[1]);
           const totalNum = Number(nums[2]);
           total = totalNum;
