@@ -23,7 +23,7 @@ const axiosClient = axios.create({
 
 const cheerio = require('cheerio');
 
-// ---- snapshot store: 마지막 예약(잔여/정원) 보존용 -----------------
+// ---- snapshot store: 마지막 예약(신청/정원) 보존용 -----------------
 let prevSlots = {};
 try {
   prevSlots = JSON.parse(fs.readFileSync('./snapshots.json', 'utf8'));
@@ -75,7 +75,7 @@ const reservationMap = {
 
 /**
  * GET /api/reservations?type=ai|earthquake|drone
- * 오늘 날짜의 예약 회차 · 잔여 인원 파싱
+ * 오늘 날짜의 예약 회차 · 신청 인원 파싱
  */
 app.get('/api/reservations', async (req, res) => {
   const type = req.query.type;
@@ -158,9 +158,15 @@ app.get('/api/reservations', async (req, res) => {
             } else {
               status = '예약가능';
             }
-            // 숫자 정보가 있으면 스냅샷 갱신
-            const snapAvail = available;   // 정원마감도 booked == total
-            prevSlots[key] = { available: snapAvail, total, status };
+            if (status === '정원마감') {
+              available = total;     // 항상 정원/정원
+            }
+            // 스냅샷 갱신 – 한 번 정원마감이면 절대 다운그레이드하지 않음
+            const snapAvail = status === '정원마감' ? total : available;
+            const prevSnap = prevSlots[key];
+            if (!prevSnap || prevSnap.status !== '정원마감') {
+              prevSlots[key] = { available: snapAvail, total, status };
+            }
           } else {
             // '신청마감' = 시간마감 or 정원마감
             const prev = prevSlots[key];
@@ -221,10 +227,15 @@ app.get('/api/reservations', async (req, res) => {
           } else {
             status = '예약가능';
           }
-          // 스냅샷 갱신
-          const key = makeKey(type, time);
-          const snapAvail = available;
-          prevSlots[key] = { available: snapAvail, total, status };
+          if (status === '정원마감') {
+            available = total;
+          }
+          // 스냅샷 갱신 – 한 번 정원마감이면 절대 다운그레이드하지 않음
+          const snapAvail = status === '정원마감' ? total : available;
+          const prevSnap2 = prevSlots[key];
+          if (!prevSnap2 || prevSnap2.status !== '정원마감') {
+            prevSlots[key] = { available: snapAvail, total, status };
+          }
         } else {
           // 괄호 없는 '신청마감'
           const key = makeKey(type, time);
@@ -237,11 +248,12 @@ app.get('/api/reservations', async (req, res) => {
                 : '시간마감';
 
             if (status === '정원마감') {
-              available = prev.total;     // booked = total
+              available = prev.total;
+              total = prev.total;
             } else {
-              available = prev.available; // 스냅샷 booked 값
+              available = prev.available;
+              total = prev.total;
             }
-            total = prev.total;
           } else {
             const slotStart = dayjs.tz(
               `${todayKST.format('YYYY-MM-DD')} ${time}`,
