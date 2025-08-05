@@ -159,7 +159,8 @@ app.get('/api/reservations', async (req, res) => {
               available = total - used;
             }
             // 숫자 정보가 있으면 스냅샷 갱신
-            prevSlots[key] = { available, total, status };
+            const snapAvail = status === '정원마감' ? 0 : available;
+            prevSlots[key] = { available: snapAvail, total, status };
           } else {
             // '신청마감' = 시간마감 or 정원마감
             const prev = prevSlots[key];
@@ -172,6 +173,9 @@ app.get('/api/reservations', async (req, res) => {
                 prev.status === '정원마감' || prev.available === 0
                   ? '정원마감'
                   : '시간마감';
+              if (status === '정원마감') {
+                available = 0; // 정원마감일 땐 잔여 0으로 고정
+              }
             } else {
               // 스냅샷이 없다 → 버튼이 바로 닫혀버린 경우.
               // 시작 시각과 현재 시각을 비교해 추정
@@ -218,7 +222,8 @@ app.get('/api/reservations', async (req, res) => {
           }
           // 스냅샷 갱신
           const key = makeKey(type, time);
-          prevSlots[key] = { available, total, status };
+          const snapAvail = status === '정원마감' ? 0 : available;
+          prevSlots[key] = { available: snapAvail, total, status };
         } else {
           // 괄호 없는 '신청마감'
           const key = makeKey(type, time);
@@ -231,6 +236,9 @@ app.get('/api/reservations', async (req, res) => {
               prev.status === '정원마감' || prev.available === 0
                 ? '정원마감'
                 : '시간마감';
+            if (status === '정원마감') {
+              available = 0;
+            }
           } else {
             const slotStart = dayjs.tz(
               `${todayKST.format('YYYY-MM-DD')} ${time}`,
