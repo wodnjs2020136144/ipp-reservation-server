@@ -37,6 +37,15 @@ const saveSnapshots = () => {
 const makeKey = (type, time) => `${type}-${time}`;
 // KST now (re‑usable)
 const nowKST = () => dayjs().tz('Asia/Seoul');
+
+/** snapshot helper: mark slot as capacity-full (정원마감) and prevent downgrade */
+function lockFullSnapshot(key, total) {
+  if (total == null) return;
+  const prev = prevSlots[key];
+  if (!prev || prev.status !== '정원마감' || prev.total == null) {
+    prevSlots[key] = { available: total, total, status: '정원마감' };
+  }
+}
 // -----------------------------------------------------------------
 
 // --- simple retry wrapper for axiosClient.get ---
@@ -110,6 +119,17 @@ app.get('/api/reservations', async (req, res) => {
     const $ = cheerio.load(html);
     const result = [];
 
+    // Pre-parse list view to obtain numeric (used/total) per time for closed slots
+    const listMap = {};
+    $('a.btn-reserve, a.btn-closed, button.btn-reserve, button.btn-closed').each((k, el) => {
+      const rawList = $(el).text().trim();            // e.g., '1회차 (15:10 ~ 15:40/유아) (0/6)'
+      const timeList = (rawList.match(/\d{1,2}:\d{2}/) || [])[0] || '';
+      const numsList = rawList.match(/\((\d+)\/(\d+)\)/);
+      if (timeList && numsList) {
+        listMap[timeList] = { used: Number(numsList[1]), total: Number(numsList[2]) };
+      }
+    });
+
     // 달력의 모든 <td> 순회
     $('table.calendar-table td').each((i, td) => {
       const dateText = $(td).find('span.day').text().trim(); // 날짜 숫자
@@ -161,42 +181,74 @@ app.get('/api/reservations', async (req, res) => {
             if (status === '정원마감') {
               available = total;     // 항상 정원/정원
             }
-            // 스냅샷 갱신 – 한 번 정원마감이면 절대 다운그레이드하지 않음
-            const snapAvail = status === '정원마감' ? total : available;
-            const prevSnap = prevSlots[key];
-            if (!prevSnap || prevSnap.status !== '정원마감') {
-              prevSlots[key] = { available: snapAvail, total, status };
+            // 스냅샷 갱신 – 정원마감이면 즉시 lock, 아니면 최신 수치로만 갱신(다운그레이드 금지)
+            if (used === total) {
+              lockFullSnapshot(key, total);
+            } else {
+              const prevSnap = prevSlots[key];
+              if (!prevSnap || prevSnap.status !== '정원마감') {
+                prevSlots[key] = { available, total, status };
+              }
             }
           } else {
-            // '신청마감' = 시간마감 or 정원마감
+            // '신청마감' (숫자 미노출) -> 스냅/리스트/시간 기준으로 결정
             const prev = prevSlots[key];
 
-            if (prev && prev.total != null) {
-              // 숫자 스냅샷이 있으면 그대로 사용
-              status =
-                prev.status === '정원마감' || prev.available === prev.total
-                  ? '정원마감'
-                  : '시간마감';
-
-              if (status === '정원마감') {
-                available = prev.total;   // booked = total
+            // 1) 리스트뷰에서 숫자 확보 시 우선 사용
+            const listInfo = listMap[time];
+            if (listInfo && listInfo.total != null) {
+              const usedL = listInfo.used;
+              const totalL = listInfo.total;
+              if (usedL >= totalL) {
+                status = '정원마감';
+                available = totalL;
+                total = totalL;
+                lockFullSnapshot(key, totalL);
               } else {
-                available = prev.available; // 기존 booked 값 유지
+                // 숫자는 있으나 닫혀있다 → 시간마감으로 간주 (마지막 신청인원 유지)
+                status = '시간마감';
+                available = usedL;
+                total = totalL;
               }
-              total = prev.total;
+            } else if (prev && prev.total != null) {
+              // 2) 스냅샷이 있으면 스냅샷 기반 판정
+              const wasFull = prev.status === '정원마감' || prev.available === prev.total;
+              status = wasFull ? '정원마감' : '시간마감';
+              if (status === '정원마감') {
+                available = prev.total;
+                total = prev.total;
+              } else {
+                available = prev.available;
+                total = prev.total;
+              }
             } else {
-              // 스냅샷이 없다 → 버튼이 바로 닫혀버린 경우.
-              // 시작 시각과 현재 시각을 비교해 추정
+              // 3) 스냅샷/리스트 데이터가 없을 때: 시작 전이면 정원마감으로 추정
               const slotStart = dayjs.tz(
                 `${todayKST.format('YYYY-MM-DD')} ${time}`,
                 'YYYY-MM-DD HH:mm',
                 'Asia/Seoul'
               );
               const beforeStart = nowKST().isBefore(slotStart);
+              if (beforeStart) {
+                status = '정원마감';
+                // 총원 정보를 아직 모름 (이후 숫자 확보 시 lock)
+                available = null;
+                total = null;
+              } else {
+                status = '시간마감';
+                available = null;
+                total = null;
+              }
+            }
+          }
 
-              status = beforeStart ? '정원마감' : '시간마감';
-              available = status === '정원마감' ? total ?? 0 : 0;
-              total = null;
+          // never downgrade: if snapshot says full, keep '정원마감' with total/total
+          const snapGuard = prevSlots[key];
+          if (snapGuard && snapGuard.status === '정원마감') {
+            status = '정원마감';
+            if (snapGuard.total != null) {
+              available = snapGuard.total;
+              total = snapGuard.total;
             }
           }
 
@@ -231,12 +283,25 @@ app.get('/api/reservations', async (req, res) => {
           if (status === '정원마감') {
             available = total;
           }
-          // 스냅샷 갱신 – 한 번 정원마감이면 절대 다운그레이드하지 않음
-          const snapAvail = status === '정원마감' ? total : available;
-          const prevSnap2 = prevSlots[key];
-          if (!prevSnap2 || prevSnap2.status !== '정원마감') {
-            prevSlots[key] = { available: snapAvail, total, status };
+          // 스냅샷 갱신 – 정원마감이면 즉시 lock, 아니면 최신 수치로만 갱신(다운그레이드 금지)
+          if (used === totalNum) {
+            lockFullSnapshot(key, totalNum);
+          } else {
+            const prevSnap2 = prevSlots[key];
+            if (!prevSnap2 || prevSnap2.status !== '정원마감') {
+              prevSlots[key] = { available, total, status };
+            }
           }
+          // never downgrade: if snapshot says full, keep '정원마감' with total/total
+          const snapGuard2 = prevSlots[key];
+          if (snapGuard2 && snapGuard2.status === '정원마감') {
+            status = '정원마감';
+            if (snapGuard2.total != null) {
+              available = snapGuard2.total;
+              total = snapGuard2.total;
+            }
+          }
+          result.push({ time, status, available, total });
         } else {
           // 괄호 없는 '신청마감'
           const key = makeKey(type, time);
@@ -267,9 +332,17 @@ app.get('/api/reservations', async (req, res) => {
             available = status === '정원마감' ? total ?? 0 : 0;
             total = null;
           }
+          // never downgrade: if snapshot says full, keep '정원마감' with total/total
+          const snapGuard2 = prevSlots[key];
+          if (snapGuard2 && snapGuard2.status === '정원마감') {
+            status = '정원마감';
+            if (snapGuard2.total != null) {
+              available = snapGuard2.total;
+              total = snapGuard2.total;
+            }
+          }
+          result.push({ time, status, available, total });
         }
-
-        result.push({ time, status, available, total });
       });
     }
     /* ---------- /fallback ---------- */
