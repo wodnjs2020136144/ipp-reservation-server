@@ -211,15 +211,30 @@ app.get('/api/reservations', async (req, res) => {
                 total = totalL;
               }
             } else if (prev && prev.total != null) {
-              // 2) 스냅샷이 있으면 스냅샷 기반 판정
-              const wasFull = prev.status === '정원마감' || prev.available === prev.total;
-              status = wasFull ? '정원마감' : '시간마감';
-              if (status === '정원마감') {
-                available = prev.total;
+              // 2) 스냅샷이 있으면 '시작 전이면 정원마감 확정' 규칙 우선
+              const slotStart = dayjs.tz(
+                `${todayKST.format('YYYY-MM-DD')} ${time}`,
+                'YYYY-MM-DD HH:mm',
+                'Asia/Seoul'
+              );
+              const beforeStart = nowKST().isBefore(slotStart);
+              if (beforeStart) {
+                // 시작 전인데 이미 '신청마감' → 정원마감으로 확정
+                status = '정원마감';
+                available = prev.total; // 정원/정원으로 고정
                 total = prev.total;
+                lockFullSnapshot(key, prev.total);
               } else {
-                available = prev.available;
-                total = prev.total;
+                // 시작 이후에는 스냅샷에 정원마감 이력이 있으면 유지, 아니면 시간마감
+                const wasFull = prev.status === '정원마감' || prev.available === prev.total;
+                status = wasFull ? '정원마감' : '시간마감';
+                if (status === '정원마감') {
+                  available = prev.total;
+                  total = prev.total;
+                } else {
+                  available = prev.available;
+                  total = prev.total;
+                }
               }
             } else {
               // 3) 스냅샷/리스트 데이터가 없을 때: 시작 전이면 정원마감으로 추정
@@ -307,20 +322,8 @@ app.get('/api/reservations', async (req, res) => {
           const key = makeKey(type, time);
           const prev = prevSlots[key];
 
-          if (prev && prev.total !=null) {
-            status =
-              prev.status === '정원마감' || prev.available === prev.total
-                ? '정원마감'
-                : '시간마감';
-
-            if (status === '정원마감') {
-              available = prev.total;
-              total = prev.total;
-            } else {
-              available = prev.available;
-              total = prev.total;
-            }
-          } else {
+          if (prev && prev.total != null) {
+            // 스냅샷이 있을 때: '시작 전이면 정원마감' 우선 규칙
             const slotStart = dayjs.tz(
               `${todayKST.format('YYYY-MM-DD')} ${time}`,
               'YYYY-MM-DD HH:mm',
@@ -328,9 +331,40 @@ app.get('/api/reservations', async (req, res) => {
             );
             const beforeStart = nowKST().isBefore(slotStart);
 
-            status = beforeStart ? '정원마감' : '시간마감';
-            available = status === '정원마감' ? total ?? 0 : 0;
-            total = null;
+            if (beforeStart) {
+              status = '정원마감';
+              available = prev.total; // 정원/정원
+              total = prev.total;
+              lockFullSnapshot(key, prev.total);
+            } else {
+              const wasFull = prev.status === '정원마감' || prev.available === prev.total;
+              status = wasFull ? '정원마감' : '시간마감';
+              if (status === '정원마감') {
+                available = prev.total;
+                total = prev.total;
+              } else {
+                available = prev.available;
+                total = prev.total;
+              }
+            }
+          } else {
+            // 스냅샷도 없으면 시간 기준으로 추정
+            const slotStart = dayjs.tz(
+              `${todayKST.format('YYYY-MM-DD')} ${time}`,
+              'YYYY-MM-DD HH:mm',
+              'Asia/Seoul'
+            );
+            const beforeStart = nowKST().isBefore(slotStart);
+
+            if (beforeStart) {
+              status = '정원마감';
+              available = null;
+              total = null;
+            } else {
+              status = '시간마감';
+              available = null;
+              total = null;
+            }
           }
           // never downgrade: if snapshot says full, keep '정원마감' with total/total
           const snapGuard2 = prevSlots[key];
