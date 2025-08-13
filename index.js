@@ -31,6 +31,11 @@ try {
 
 const saveSnapshots = () => {
   try {
+    // 스냅샷 파일에 항상 금일(KST) 날짜를 함께 저장
+    if (typeof prevSlots !== 'object' || prevSlots === null) prevSlots = {};
+    // dayjs 는 아래에서 초기화되지만, saveSnapshots 가 호출될 때는 이미 초기화가 끝난 시점이므로 참조 가능
+    const today = dayjs().tz('Asia/Seoul').format('YYYY-MM-DD');
+    prevSlots._date = today;
     fs.writeFileSync('./snapshots.json', JSON.stringify(prevSlots));
   } catch (_) {}
 };
@@ -71,6 +76,20 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 // -------------------------------------------------------
 
+// 매일 0시(KST) 넘어가면 스냅샷 초기화 (정원마감 락이 다음날로 넘어오지 않도록)
+function ensureSnapshotDate() {
+  try {
+    const today = dayjs().tz('Asia/Seoul').format('YYYY-MM-DD');
+    if (prevSlots && prevSlots._date !== today) {
+      prevSlots = { _date: today };
+      fs.writeFileSync('./snapshots.json', JSON.stringify(prevSlots));
+      console.log('[snapshots] reset for new day:', today);
+    }
+  } catch (e) {
+    console.warn('[snapshots] ensureSnapshotDate failed:', e.message);
+  }
+}
+
 const app = express();
 const PORT = 4000;
 app.use(cors());
@@ -95,6 +114,9 @@ app.get('/api/reservations', async (req, res) => {
   const todayKST = dayjs().tz('Asia/Seoul');
   const todayDay = todayKST.day();   // 0(일) ~ 6(토)
   const todayDate = todayKST.date(); // 1 ~ 31
+
+  // 날짜가 바뀌었다면(00:00 KST 이후) 이전날 스냅샷을 초기화
+  ensureSnapshotDate();
 
   // 휴무 조건
   if (todayDay === 1) return res.json({ message: '월요일 휴관', data: [] });
