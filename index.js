@@ -45,6 +45,27 @@ const saveSnapshots = () => {
 const makeKey = (type, time) => `${type}-${time}`;
 const nowKST = () => dayjs().tz('Asia/Seoul');
 
+/**
+ * 슬롯 시간과 현재 시간을 비교하여 '예약가능' 또는 '예약대기' 상태를 반환합니다.
+ * @param {string} slotTimeStr - '10:10' 형식의 슬롯 시간
+ * @param {dayjs.Dayjs} now - 현재 시간 (dayjs 객체)
+ * @returns {'예약가능' | '예약대기'}
+ */
+function getPreReservationStatus(slotTimeStr, now) {
+  const slotHour = parseInt(slotTimeStr.split(':')[0], 10);
+  const todayDateStr = now.format('YYYY-MM-DD');
+
+  // 타임존을 포함한 시간 객체 생성
+  const morningOpen = dayjs.tz(`${todayDateStr} 09:00`, 'Asia/Seoul');
+  const afternoonOpen = dayjs.tz(`${todayDateStr} 12:00`, 'Asia/Seoul');
+
+  if (slotHour < 12) { // 오전 슬롯 (12시 미만)
+    return now.isBefore(morningOpen) ? '예약대기' : '예약가능';
+  } else { // 오후 슬롯 (12시 이상)
+    return now.isBefore(afternoonOpen) ? '예약대기' : '예약가능';
+  }
+}
+
 // --- simple retry wrapper for axiosClient.get ---
 async function fetchHtmlWithRetry(url, maxRetry = 3) {
   let lastErr;
@@ -172,7 +193,12 @@ async function fetchAndParseReservations(type) {
         const [used, totalNum] = statusRaw.split('/').map(Number);
         total = totalNum;
         available = used;
-        status = (used >= totalNum) ? '정원마감' : '예약가능';
+        if (used >= totalNum) {
+          status = '정원마감';
+        } else {
+          // 예약 가능 여부를 시간 규칙에 따라 판단
+          status = getPreReservationStatus(time, todayKST);
+        }
         if (status === '정원마감') available = total; // 정원마감 시 available을 total과 일치
 
         // 스냅샷을 최신 정보로 무조건 업데이트
@@ -234,7 +260,12 @@ async function fetchAndParseReservations(type) {
         const totalNum = Number(nums[2]);
         available = used;
         total = totalNum;
-        status = (used >= totalNum) ? '정원마감' : '예약가능';
+        if (used >= totalNum) {
+          status = '정원마감';
+        } else {
+          // 예약 가능 여부를 시간 규칙에 따라 판단
+          status = getPreReservationStatus(time, todayKST);
+        }
         if (status === '정원마감') available = total;
 
         prevSlots[key] = { available, total, status };
