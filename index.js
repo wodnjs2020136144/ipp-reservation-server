@@ -31,7 +31,7 @@ dayjs.extend(timezone);
 let prevSlots = {};
 try {
   prevSlots = JSON.parse(fs.readFileSync('./snapshots.json', 'utf8'));
-} catch (_) {}
+} catch (_) { }
 
 const saveSnapshots = () => {
   try {
@@ -39,21 +39,11 @@ const saveSnapshots = () => {
     const today = dayjs().tz('Asia/Seoul').format('YYYY-MM-DD');
     prevSlots._date = today;
     fs.writeFileSync('./snapshots.json', JSON.stringify(prevSlots));
-  } catch (_) {}
+  } catch (_) { }
 };
 
 const makeKey = (type, time) => `${type}-${time}`;
 const nowKST = () => dayjs().tz('Asia/Seoul');
-
-/** snapshot helper: mark slot as capacity-full (정원마감) and prevent downgrade */
-function lockFullSnapshot(key, total) {
-  if (total == null) return;
-  const prev = prevSlots[key];
-  if (!prev || prev.status !== '정원마감' || prev.total == null) {
-    prevSlots[key] = { available: total, total, status: '정원마감' };
-  }
-}
-// -----------------------------------------------------------------
 
 // --- simple retry wrapper for axiosClient.get ---
 async function fetchHtmlWithRetry(url, maxRetry = 3) {
@@ -94,7 +84,6 @@ app.use(cors());
 
 /**
  * ✨ [추가] 예약 종류별 달력 URL 확장
- * - 기존 IPP 파트와 신규 과학해설사 파트를 모두 포함합니다.
  */
 const reservationMap = {
   // --- IPP 실습생용 ---
@@ -133,10 +122,10 @@ async function fetchAndParseReservations(type) {
 
   const resp = await fetchHtmlWithRetry(url, 3);
   console.log('[crawl]', type, 'status:', resp.status, 'length:',
-      resp.headers['content-length'] || 'n/a',
-      resp.headers.location ? 'redirect-> ' + resp.headers.location : '');
+    resp.headers['content-length'] || 'n/a',
+    resp.headers.location ? 'redirect-> ' + resp.headers.location : '');
   const html = resp.data;
-  
+
   // HTML 임시 저장 (디버깅용)
   try {
     fs.writeFileSync(`/tmp/${type}.html`, html);
@@ -148,7 +137,7 @@ async function fetchAndParseReservations(type) {
   const result = [];
 
   // (이하 파싱 로직은 기존 코드와 100% 동일합니다)
-  
+
   // Pre-parse list view to obtain numeric (used/total) per time for closed slots
   const listMap = {};
   $('a.btn-reserve, a.btn-closed, button.btn-reserve, button.btn-closed').each((k, el) => {
@@ -162,87 +151,66 @@ async function fetchAndParseReservations(type) {
   });
 
   // 달력의 모든 <td> 순회
+  // --- ✨ [수정] 메인 파싱 로직 ---
   $('table.calendar-table td').each((i, td) => {
-    // ... (기존과 동일)
     const dateText = $(td).find('span.day').text().trim();
     const cellDate = parseInt(dateText, 10);
     if (cellDate !== todayDate) return;
-    try {
-      fs.writeFileSync(`/tmp/${type}-today.html`, $(td).html());
-    } catch (e) {
-      console.warn('debug today-cell write failed:', e.message);
-    }
+
     $(td).find('a.word-wrap, button.word-wrap').each((j, el) => {
-      // ... (모든 파싱 및 상태 결정 로직 기존과 동일)
       const raw = $(el).text().trim();
       const time = (raw.match(/^\d{1,2}:\d{2}/) || [])[0] || '';
+      if (!time) return; // 시간이 없으면 유효하지 않은 슬롯
+
       const statusRaw = (raw.match(/\((.*?)\)$/) || [])[1] || '';
       let status = '', available = null, total = null;
       const key = makeKey(type, time);
-      if (/^\d+\/\d+$/.test(statusRaw)) {
-        const [usedStr, totalStr] = statusRaw.split('/').map(Number);
-        const used = usedStr;
-        total = totalStr;
+      const isNumericStatus = /^\d+\/\d+$/.test(statusRaw);
+
+      if (isNumericStatus) {
+        // 1. 숫자 데이터 (e.g., 5/6)가 있으면, 항상 이 정보를 신뢰하고 스냅샷을 덮어씀
+        const [used, totalNum] = statusRaw.split('/').map(Number);
+        total = totalNum;
         available = used;
-        status = (used === total) ? '정원마감' : '예약가능';
-        if (status === '정원마감') available = total;
-        if (used === total) {
-          lockFullSnapshot(key, total);
-        } else {
-          const prevSnap = prevSlots[key];
-          if (!prevSnap || prevSnap.status !== '정원마감') {
-            prevSlots[key] = { available, total, status };
-          }
-        }
+        status = (used >= totalNum) ? '정원마감' : '예약가능';
+        if (status === '정원마감') available = total; // 정원마감 시 available을 total과 일치
+
+        // 스냅샷을 최신 정보로 무조건 업데이트
+        prevSlots[key] = { available, total, status };
+
       } else {
+        // 2. 숫자 데이터가 없으면 (e.g., '신청마감'), 스냅샷과 다른 정보를 활용해 추론
         const prev = prevSlots[key];
         const listInfo = listMap[time];
+
         if (listInfo && listInfo.total != null) {
-          const usedL = listInfo.used;
-          const totalL = listInfo.total;
-          if (usedL >= totalL) {
-            status = '정원마감';
-            available = totalL;
-            total = totalL;
-            lockFullSnapshot(key, totalL);
-          } else {
-            status = '시간마감';
-            available = usedL;
-            total = totalL;
-          }
+          // 리스트뷰에 숫자 정보가 있으면 활용
+          const { used, total: totalL } = listInfo;
+          available = used;
+          total = totalL;
+          status = (used >= totalL) ? '정원마감' : '시간마감';
+          if (status === '정원마감') available = total;
+
         } else if (prev && prev.total != null) {
+          // 스냅샷 정보가 있으면 활용
+          available = prev.available;
+          total = prev.total;
+          const wasFull = prev.status === '정원마감' || prev.available >= prev.total;
+
           const slotStart = dayjs.tz(`${todayKST.format('YYYY-MM-DD')} ${time}`, 'YYYY-MM-DD HH:mm', 'Asia/Seoul');
           const beforeStart = nowKST().isBefore(slotStart);
-          if (beforeStart) {
+
+          if (beforeStart && wasFull) {
             status = '정원마감';
-            available = prev.total;
-            total = prev.total;
-            lockFullSnapshot(key, prev.total);
+            available = total;
           } else {
-            const wasFull = prev.status === '정원마감' || prev.available === prev.total;
             status = wasFull ? '정원마감' : '시간마감';
-            if (status === '정원마감') {
-              available = prev.total;
-              total = prev.total;
-            } else {
-              available = prev.available;
-              total = prev.total;
-            }
+            if (status === '정원마감') available = total;
           }
         } else {
+          // 정보가 전혀 없으면 시간으로만 추정
           const slotStart = dayjs.tz(`${todayKST.format('YYYY-MM-DD')} ${time}`, 'YYYY-MM-DD HH:mm', 'Asia/Seoul');
-          const beforeStart = nowKST().isBefore(slotStart);
-          status = beforeStart ? '정원마감' : '시간마감';
-          available = null;
-          total = null;
-        }
-      }
-      const snapGuard = prevSlots[key];
-      if (snapGuard && snapGuard.status === '정원마감') {
-        status = '정원마감';
-        if (snapGuard.total != null) {
-          available = snapGuard.total;
-          total = snapGuard.total;
+          status = nowKST().isBefore(slotStart) ? '정원마감' : '시간마감';
         }
       }
       result.push({ time, status, available, total });
@@ -252,75 +220,40 @@ async function fetchAndParseReservations(type) {
   /* ---------- Fallback: 일(日)‑단위 목록 뷰 ---------- */
   if (result.length === 0) {
     $('a.btn-reserve, a.btn-closed, button.btn-reserve, button.btn-closed').each((k, el) => {
-        // ... (모든 Fallback 로직 기존과 동일)
-        const raw = $(el).text().trim();
-        const time = (raw.match(/\d{1,2}:\d{2}/) || [])[0] || '';
-        let status = '', available = null, total = null;
-        const nums = raw.match(/\((\d+)\/(\d+)\)/);
-        if (nums) {
-            const key = makeKey(type, time);
-            const used = Number(nums[1]);
-            const totalNum = Number(nums[2]);
-            total = totalNum;
-            available = used;
-            status = (used === totalNum) ? '정원마감' : '예약가능';
-            if (status === '정원마감') available = total;
-            if (used === totalNum) {
-                lockFullSnapshot(key, totalNum);
-            } else {
-                const prevSnap2 = prevSlots[key];
-                if (!prevSnap2 || prevSnap2.status !== '정원마감') {
-                    prevSlots[key] = { available, total, status };
-                }
-            }
-            const snapGuard2 = prevSlots[key];
-            if (snapGuard2 && snapGuard2.status === '정원마감') {
-                status = '정원마감';
-                if (snapGuard2.total != null) {
-                    available = snapGuard2.total;
-                    total = snapGuard2.total;
-                }
-            }
-            result.push({ time, status, available, total });
+      const raw = $(el).text().trim();
+      const time = (raw.match(/\d{1,2}:\d{2}/) || [])[0] || '';
+      if (!time) return;
+
+      let status = '', available = null, total = null;
+      const key = makeKey(type, time);
+      const nums = raw.match(/\((\d+)\/(\d+)\)/);
+
+      if (nums) {
+        // 1. 숫자 데이터가 있으면 항상 신뢰하고 스냅샷 덮어쓰기
+        const used = Number(nums[1]);
+        const totalNum = Number(nums[2]);
+        available = used;
+        total = totalNum;
+        status = (used >= totalNum) ? '정원마감' : '예약가능';
+        if (status === '정원마감') available = total;
+
+        prevSlots[key] = { available, total, status };
+
+      } else {
+        // 2. 숫자 데이터가 없으면 스냅샷으로 추론
+        const prev = prevSlots[key];
+        if (prev && prev.total != null) {
+          available = prev.available;
+          total = prev.total;
+          const wasFull = prev.status === '정원마감' || prev.available >= prev.total;
+          status = wasFull ? '정원마감' : '시간마감';
+          if (status === '정원마감') available = total;
         } else {
-            const key = makeKey(type, time);
-            const prev = prevSlots[key];
-            if (prev && prev.total != null) {
-                const slotStart = dayjs.tz(`${todayKST.format('YYYY-MM-DD')} ${time}`, 'YYYY-MM-DD HH:mm', 'Asia/Seoul');
-                const beforeStart = nowKST().isBefore(slotStart);
-                if (beforeStart) {
-                    status = '정원마감';
-                    available = prev.total;
-                    total = prev.total;
-                    lockFullSnapshot(key, prev.total);
-                } else {
-                    const wasFull = prev.status === '정원마감' || prev.available === prev.total;
-                    status = wasFull ? '정원마감' : '시간마감';
-                    if (status === '정원마감') {
-                      available = prev.total;
-                      total = prev.total;
-                    } else {
-                      available = prev.available;
-                      total = prev.total;
-                    }
-                }
-            } else {
-                const slotStart = dayjs.tz(`${todayKST.format('YYYY-MM-DD')} ${time}`, 'YYYY-MM-DD HH:mm', 'Asia/Seoul');
-                const beforeStart = nowKST().isBefore(slotStart);
-                status = beforeStart ? '정원마감' : '시간마감';
-                available = null;
-                total = null;
-            }
-            const snapGuard2 = prevSlots[key];
-            if (snapGuard2 && snapGuard2.status === '정원마감') {
-                status = '정원마감';
-                if (snapGuard2.total != null) {
-                    available = snapGuard2.total;
-                    total = snapGuard2.total;
-                }
-            }
-            result.push({ time, status, available, total });
+          const slotStart = dayjs.tz(`${todayKST.format('YYYY-MM-DD')} ${time}`, 'YYYY-MM-DD HH:mm', 'Asia/Seoul');
+          status = nowKST().isBefore(slotStart) ? '정원마감' : '시간마감';
         }
+      }
+      result.push({ time, status, available, total });
     });
   }
   /* ---------- /fallback ---------- */
