@@ -218,20 +218,18 @@ async function fetchAndParseReservations(type) {
           if (status === '정원마감') available = total;
 
         } else if (prev && prev.total != null) {
-          // 스냅샷 정보가 있으면 활용
+          // 스냅샷 정보가 있으면 활용 (수정된 로직)
           available = prev.available;
           total = prev.total;
           const wasFull = prev.status === '정원마감' || prev.available >= prev.total;
 
-          const slotStart = dayjs.tz(`${todayKST.format('YYYY-MM-DD')} ${time}`, 'YYYY-MM-DD HH:mm', 'Asia/Seoul');
-          const beforeStart = nowKST().isBefore(slotStart);
-
-          if (beforeStart && wasFull) {
+          // 스냅샷에 '정원마감' 이력이 있으면 항상 '정원마감'으로 유지
+          if (wasFull) {
             status = '정원마감';
             available = total;
           } else {
-            status = wasFull ? '정원마감' : '시간마감';
-            if (status === '정원마감') available = total;
+            // 정원마감 이력이 없는데 '신청마감'으로 바뀐 경우 -> '시간마감'
+            status = '시간마감';
           }
         } else {
           // 정보가 전혀 없으면 시간으로만 추정
@@ -277,8 +275,13 @@ async function fetchAndParseReservations(type) {
           available = prev.available;
           total = prev.total;
           const wasFull = prev.status === '정원마감' || prev.available >= prev.total;
-          status = wasFull ? '정원마감' : '시간마감';
-          if (status === '정원마감') available = total;
+
+          if (wasFull) {
+            status = '정원마감';
+            available = total;
+          } else {
+            status = '시간마감';
+          }
         } else {
           const slotStart = dayjs.tz(`${todayKST.format('YYYY-MM-DD')} ${time}`, 'YYYY-MM-DD HH:mm', 'Asia/Seoul');
           status = nowKST().isBefore(slotStart) ? '정원마감' : '시간마감';
