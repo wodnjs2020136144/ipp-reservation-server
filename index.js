@@ -216,20 +216,31 @@ async function fetchAndParseReservations(type) {
           total = totalL;
           status = (used >= totalL) ? '정원마감' : '시간마감';
           if (status === '정원마감') available = total;
-
         } else if (prev && prev.total != null) {
           // 스냅샷 정보가 있으면 활용 (수정된 로직)
           available = prev.available;
           total = prev.total;
           const wasFull = prev.status === '정원마감' || prev.available >= prev.total;
 
-          // 스냅샷에 '정원마감' 이력이 있으면 항상 '정원마감'으로 유지
           if (wasFull) {
+            // 스냅샷에 이미 '정원마감' 이력이 있으면 항상 '정원마감'으로 유지
             status = '정원마감';
             available = total;
           } else {
-            // 정원마감 이력이 없는데 '신청마감'으로 바뀐 경우 -> '시간마감'
-            status = '시간마감';
+            // 정원마감 이력이 없을 때, 시간으로 한번 더 판단
+            const slotStart = dayjs.tz(`${todayKST.format('YYYY-MM-DD')} ${time}`, 'YYYY-MM-DD HH:mm', 'Asia/Seoul');
+            const beforeStart = nowKST().isBefore(slotStart);
+
+            if (beforeStart) {
+              // 예약 시작 전인데 마감됐다면, '정원마감'으로 확정
+              status = '정원마감';
+              available = total;
+              // 스냅샷도 '정원마감'으로 갱신
+              prevSlots[key] = { available, total, status };
+            } else {
+              // 예약 시간이 지난 후라면 '시간마감'
+              status = '시간마감';
+            }
           }
         } else {
           // 정보가 전혀 없으면 시간으로만 추정
@@ -269,7 +280,7 @@ async function fetchAndParseReservations(type) {
         prevSlots[key] = { available, total, status };
 
       } else {
-        // 2. 숫자 데이터가 없으면 스냅샷으로 추론
+        // 2. 숫자 데이터가 없으면 스냅샷으로 추론 (수정된 로직)
         const prev = prevSlots[key];
         if (prev && prev.total != null) {
           available = prev.available;
@@ -280,7 +291,16 @@ async function fetchAndParseReservations(type) {
             status = '정원마감';
             available = total;
           } else {
-            status = '시간마감';
+            const slotStart = dayjs.tz(`${todayKST.format('YYYY-MM-DD')} ${time}`, 'YYYY-MM-DD HH:mm', 'Asia/Seoul');
+            const beforeStart = nowKST().isBefore(slotStart);
+
+            if (beforeStart) {
+              status = '정원마감';
+              available = total;
+              prevSlots[key] = { available, total, status };
+            } else {
+              status = '시간마감';
+            }
           }
         } else {
           const slotStart = dayjs.tz(`${todayKST.format('YYYY-MM-DD')} ${time}`, 'YYYY-MM-DD HH:mm', 'Asia/Seoul');
