@@ -115,7 +115,7 @@ const reservationMap = {
   // --- 과학해설사용 ---
   science: 'https://www.cnse.or.kr/main/reserve/guide_calendar.action?q=399c727ae1585fb2c8ac05f7295f26d0b761f9927b66e8ae3cdfc42b8534895d',
   toddler: 'https://www.cnse.or.kr/main/reserve/experience_calendar.action?q=fc018295988dd7a5d5492bc11a0bd1b31d314419ee6dca65debf4a97ef02f8bb',
-  // robot: 'https://www.cnse.or.kr/main/reserve/guide_calendar.action?q=cbc435e029c9390985c5e31542b88464a21905bdc4584bb7549414974b78147a',
+  robot: 'https://www.cnse.or.kr/main/reserve/guide_calendar.action?q=cbc435e029c9390985c5e31542b88464a21905bdc4584bb7549414974b78147a',
 };
 
 
@@ -346,11 +346,10 @@ app.get('/api/reservations', async (req, res) => {
  * GET /api/reservations/all
  */
 app.get('/api/reservations/all', async (req, res) => {
-  // VR, 로봇댄스 임시로 타입 제거
+  // VR 임시로 타입 제거
   // const ippTypes = ['ai', 'earthquake', 'drone'];
   const ippTypes = ['ai'];
-  // const commentatorTypes = ['science', 'toddler', 'robot'];
-  const commentatorTypes = ['science', 'toddler'];
+  const commentatorTypes = ['science', 'toddler', 'robot'];
 
   try {
     ensureSnapshotDate();
@@ -369,7 +368,7 @@ app.get('/api/reservations/all', async (req, res) => {
       commentator: {
         science: allResults[1], // 인덱스 조정
         toddler: allResults[2],
-        // robot: allResults[3],
+        robot: allResults[3],
       },
     };
 
