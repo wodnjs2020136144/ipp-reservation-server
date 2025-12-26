@@ -109,8 +109,8 @@ app.use(cors());
 const reservationMap = {
   // --- IPP 실습생용 ---
   ai: 'https://www.cnse.or.kr/main/reserve/experience_calendar.action?q=1f960d474357a0fac696373aa47231c9819814b7d50f96cb7e020bd713813353',
-  // earthquake: 'https://www.cnse.or.kr/main/reserve/experience_calendar.action?q=836d40ad6724f3585ecc91c192de8f29d7b34b85db4c936465070bb8a1d25af5',
-  // drone: 'https://www.cnse.or.kr/main/reserve/experience_calendar.action?q=33152e18b25f10571da6b0aa11ccf9f07e6211fe37567968e6c591f23fa5c429',
+  earthquake: 'https://www.cnse.or.kr/main/reserve/experience_calendar.action?q=836d40ad6724f3585ecc91c192de8f29d7b34b85db4c936465070bb8a1d25af5',
+  drone: 'https://www.cnse.or.kr/main/reserve/experience_calendar.action?q=33152e18b25f10571da6b0aa11ccf9f07e6211fe37567968e6c591f23fa5c429',
 
   // --- 과학해설사용 ---
   science: 'https://www.cnse.or.kr/main/reserve/guide_calendar.action?q=399c727ae1585fb2c8ac05f7295f26d0b761f9927b66e8ae3cdfc42b8534895d',
@@ -346,9 +346,7 @@ app.get('/api/reservations', async (req, res) => {
  * GET /api/reservations/all
  */
 app.get('/api/reservations/all', async (req, res) => {
-  // VR 임시로 타입 제거
-  // const ippTypes = ['ai', 'earthquake', 'drone'];
-  const ippTypes = ['ai'];
+  const ippTypes = ['ai', 'earthquake', 'drone'];
   const commentatorTypes = ['science', 'toddler', 'robot'];
 
   try {
@@ -362,13 +360,13 @@ app.get('/api/reservations/all', async (req, res) => {
     const responseData = {
       ipp: {
         ai: allResults[0],
-        // earthquake: allResults[], // 빈 배열 반환
-        // drone: allResults[], // 빈 배열 반환
+        earthquake: allResults[1],
+        drone: allResults[2],
       },
       commentator: {
-        science: allResults[1], // 인덱스 조정
-        toddler: allResults[2],
-        robot: allResults[3],
+        science: allResults[3],
+        toddler: allResults[4],
+        robot: allResults[5],
       },
     };
 
