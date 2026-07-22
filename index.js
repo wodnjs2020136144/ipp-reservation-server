@@ -8,6 +8,7 @@ const timezone = require('dayjs/plugin/timezone');
 
 const db = require('./db');
 const crawler = require('./crawler');
+const agent = require('./agent');
 
 const swaggerUi = require('swagger-ui-express');
 const YAML = require('yamljs');
@@ -20,8 +21,9 @@ dayjs.extend(timezone);
 const app = express();
 const PORT = 4000;
 
-// CORS 설정: 실제 상용화 환경에서는 허용 도메인 목록을 구체적으로 정하는 것이 좋음
+// CORS 및 JSON 파서 미들웨어 설정
 app.use(cors());
+app.use(express.json());
 
 // Swagger UI 문서 라우팅 등록
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
@@ -106,6 +108,26 @@ app.get('/api/reservations/all', async (req, res) => {
 // 헬스체크 및 메인 엔드포인트
 app.get('/', (_, res) => {
   res.send('예약 캐시 백엔드 서버가 정상 작동 중입니다.');
+});
+
+/**
+ * AI 예약 비서 챗봇 엔드포인트
+ * POST /api/chat
+ * Body: { message: string }
+ */
+app.post('/api/chat', async (req, res) => {
+  const { message } = req.body;
+  if (!message) {
+    return res.status(400).json({ error: 'message is required' });
+  }
+
+  try {
+    const reply = await agent.handleAgentChat(message);
+    res.json({ reply });
+  } catch (err) {
+    console.error('[AI Chat API Error]', err.message);
+    res.status(500).json({ error: 'AI Agent failed to process', detail: err.message });
+  }
 });
 
 // ================================================================
