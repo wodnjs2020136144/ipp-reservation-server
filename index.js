@@ -9,6 +9,11 @@ const timezone = require('dayjs/plugin/timezone');
 const db = require('./db');
 const crawler = require('./crawler');
 
+const swaggerUi = require('swagger-ui-express');
+const YAML = require('yamljs');
+const path = require('path');
+const swaggerDocument = YAML.load(path.join(__dirname, 'openapi.yaml'));
+
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
@@ -17,6 +22,9 @@ const PORT = 4000;
 
 // CORS 설정: 실제 상용화 환경에서는 허용 도메인 목록을 구체적으로 정하는 것이 좋음
 app.use(cors());
+
+// Swagger UI 문서 라우팅 등록
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 const nowKST = () => dayjs().tz('Asia/Seoul');
 

@@ -1,0 +1,177 @@
+openapi: 3.0.3
+info:
+  title: 충청남도교육청 과학교육원 예약 정보 크롤링 API
+  description: |
+    본 API는 충청남도교육청 과학교육원의 체험 및 과학 해설사 예약 정보를 실시간으로 크롤링하여 캐싱하고 서빙하는 서버입니다.
+    
+    이 스펙은 AI Agent가 예약 자리를 조회하고 자율적인 의사결정(AX)을 내릴 수 있도록 OpenAPI 3.0 스펙에 준하여 튼튼하게 설계되었습니다.
+  version: 1.0.0
+servers:
+  - url: http://localhost:4000
+    description: 로컬 개발 서버
+  - url: https://ipp-reservation-server.fly.dev
+    description: Fly.io 상용 스테이징 서버
+paths:
+  /api/reservations:
+    get:
+      summary: 특정 분야의 금일 예약 현황 조회
+      description: |
+        지정한 예약 종류(type)에 해당하는 오늘 날짜의 예약 시간대별 상태 정보를 가져옵니다. 
+        캐싱되지 않은 상태에서 요청이 오면 크롤러가 실시간으로 데이터를 백필(Backfill)합니다.
+      operationId: getReservationsByType
+      parameters:
+        - name: type
+          in: query
+          description: 조회하고자 하는 예약 카테고리 ID
+          required: true
+          schema:
+            type: string
+            enum:
+              - ai
+              - earthquake
+              - drone
+              - science
+              - toddler
+              - robot
+      responses:
+        '200':
+          description: 성공적인 조회 결과 반환
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 정상 조회
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReservationSlot'
+        '400':
+          description: 잘못된 요청 (지원하지 않는 type 등)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 서버 내부 오류 혹은 크롤링 실패
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/reservations/all:
+    get:
+      summary: 전체 분야의 금일 예약 현황 일괄 조회
+      description: |
+        실습생 담당 프로그램(ipp) 및 과학해설사 프로그램(commentator) 전체 분야의 오늘 날짜 예약 정보를 트리 구조로 반환합니다.
+      operationId: getAllReservations
+      responses:
+        '200':
+          description: 성공적인 전체 조회 결과 반환
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ipp:
+                    type: object
+                    properties:
+                      ai:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ReservationSlot'
+                      earthquake:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ReservationSlot'
+                      drone:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ReservationSlot'
+                  commentator:
+                    type: object
+                    properties:
+                      science:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ReservationSlot'
+                      toddler:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ReservationSlot'
+                      robot:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ReservationSlot'
+        '500':
+          description: 전체 크롤링 및 조회 오류
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /:
+    get:
+      summary: 서버 헬스체크
+      description: API 서버가 정상 기동 중인지 검증하기 위한 헬스체크 엔드포인트입니다.
+      operationId: healthCheck
+      responses:
+        '200':
+          description: 서버 정상 기동 확인
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: 예약 캐시 백엔드 서버가 정상 작동 중입니다.
+
+components:
+  schemas:
+    ReservationSlot:
+      type: object
+      required:
+        - time
+        - status
+      properties:
+        time:
+          type: string
+          description: 예약 슬롯 시작 시간
+          example: "10:10"
+        status:
+          type: string
+          description: 예약 진행 현황
+          enum:
+            - 예약가능
+            - 예약대기
+            - 정원마감
+            - 시간마감
+          example: "예약가능"
+        available:
+          type: integer
+          nullable: true
+          description: 현재 신청한 인원수 (숫자 데이터 미제공 시 null)
+          example: 3
+        total:
+          type: integer
+          nullable: true
+          description: 최대 예약 가능 정원 (숫자 데이터 미제공 시 null)
+          example: 6
+        updated_at:
+          type: string
+          description: 해당 슬롯 상태를 크롤러가 DB에 기록한 로컬 일시
+          example: "2026-07-22 12:09:48"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: 에러 유형 또는 요약 메시지
+          example: "invalid type"
+        detail:
+          type: string
+          description: 구체적인 에러 스택 혹은 원인 정보
+          example: "The requested reservation type is not mapped."
