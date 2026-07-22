@@ -43,3 +43,10 @@ debug/
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml
+
+# --- Local database & state ---
+data.db
+data.db-journal
+data.db-wal
+data.db-shm
+snapshots.json
