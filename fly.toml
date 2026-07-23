@@ -26,7 +26,7 @@ primary_region = 'nrt'           # Tokyo region (low latency to Korea)
     handlers = ['tls', 'http']
     port = 443
 
-[[vm]]                           # free tier size
+[[vm]]                           # increased memory for better-sqlite3
   cpu_kind = 'shared'
   cpus = 1
-  memory = '256mb'
+  memory = '512mb'
