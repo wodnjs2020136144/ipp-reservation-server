@@ -18,7 +18,8 @@ FROM base AS build
 
 # Install packages needed to build node modules
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential node-gyp pkg-config python-is-python3
+    apt-get install --no-install-recommends -y build-essential node-gyp pkg-config python3 && \
+    rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
 # Install node modules
 COPY package-lock.json package.json ./
@@ -31,15 +32,11 @@ COPY . .
 # Final stage for app image
 FROM base
 
-# Install packages needed for deployment
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y chromium chromium-sandbox && \
-    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+# No additional deployment packages needed
 
 # Copy built application
 COPY --from=build /app /app
 
 # Start the server by default, this can be overwritten at runtime
 EXPOSE 4000
-ENV PUPPETEER_EXECUTABLE_PATH="/usr/bin/chromium"
 CMD [ "npm", "run", "start" ]

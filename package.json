@@ -9,7 +9,6 @@
     "dotenv": "^17.4.2",
     "express": "^5.1.0",
     "node-cron": "^4.6.0",
-    "puppeteer": "^24.11.2",
     "swagger-ui-express": "^5.0.1",
     "yamljs": "^0.3.0"
   },
