@@ -80,7 +80,7 @@ async function handleAgentChat(userMessage) {
 
   try {
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.0-flash',
       systemInstruction: `당신은 충청남도교육청 과학교육원의 체험/가이드 예약을 지원하는 AI 예약 비서 에이전트입니다.
       - 오늘 날짜는 ${dayjs().tz('Asia/Seoul').format('YYYY년 MM월 DD일')} 이며 요일은 ${['일', '월', '화', '수', '목', '금', '토'][dayjs().tz('Asia/Seoul').day()]}요일입니다.
       - 사용자의 질문에서 예약 관련 정보를 가져와야 하는 경우, 반드시 적절한 도구(getReservations 또는 getAllReservations)를 호출하십시오.
