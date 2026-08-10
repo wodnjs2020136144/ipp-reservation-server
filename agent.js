@@ -125,8 +125,8 @@ async function handleAgentChat(userMessage) {
 
     return response.text();
   } catch (error) {
-    console.error('[AI Agent Error]', error.message);
-    return `AI 예약 비서 오류 발생: ${error.message}`;
+    console.error('[AI Agent Error]', error);
+    return 'AI 예약 비서 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
   }
 }
 

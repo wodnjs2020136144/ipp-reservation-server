@@ -1,6 +1,7 @@
 // index.js — 예약 현황 API 서버 (SQLite 캐시 + 백그라운드 스케줄러 구조)
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const cron = require('node-cron');
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
@@ -19,11 +20,40 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 
 const app = express();
-const PORT = 4000;
+const PORT = process.env.PORT || 4000;
+
+// CORS 허용 origin 목록 (쉼표로 구분된 CORS_ALLOWED_ORIGINS 환경변수로 오버라이드 가능)
+// 모바일 앱(Expo/React Native)의 네이티브 fetch는 브라우저 CORS 정책 대상이 아니므로 영향받지 않음.
+// 이 화이트리스트는 Swagger UI, 로컬 웹 개발(expo start --web) 등 브라우저 기반 접근을 위한 것.
+const defaultAllowedOrigins = [
+  'http://localhost:19006', // expo web 기본 포트
+  'http://localhost:8081',
+  'https://ipp-reservation-server.fly.dev',
+];
+const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
+  ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : defaultAllowedOrigins;
 
 // CORS 및 JSON 파서 미들웨어 설정
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin(origin, callback) {
+    // origin이 없는 요청(모바일 앱 네이티브 fetch, curl, 서버 간 호출)은 허용
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('CORS 정책에 의해 차단된 origin입니다.'));
+  }
+}));
+app.use(express.json({ limit: '100kb' }));
+
+// /api/chat 전용 rate limiter — Gemini API 과금/DoS 방지
+const chatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' }
+});
 
 // Swagger UI 문서 라우팅 등록
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
@@ -72,8 +102,8 @@ app.get('/api/reservations', async (req, res) => {
 
     res.json({ message: '정상 조회', data: result });
   } catch (err) {
-    console.error('[API Error]', type, err.message);
-    res.status(500).json({ error: '데이터 조회 실패', detail: err.message });
+    console.error('[API Error]', type, err);
+    res.status(500).json({ error: '데이터 조회 실패' });
   }
 });
 
@@ -100,8 +130,8 @@ app.get('/api/reservations/all', async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error('[API All Error]', err.message);
-    res.status(500).json({ error: '전체 데이터 조회 실패', detail: err.message });
+    console.error('[API All Error]', err);
+    res.status(500).json({ error: '전체 데이터 조회 실패' });
   }
 });
 
@@ -115,9 +145,9 @@ app.get('/', (_, res) => {
  * POST /api/chat
  * Body: { message: string }
  */
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', chatLimiter, async (req, res) => {
   const { message } = req.body;
-  if (!message) {
+  if (!message || typeof message !== 'string') {
     return res.status(400).json({ error: 'message is required' });
   }
 
@@ -125,9 +155,16 @@ app.post('/api/chat', async (req, res) => {
     const reply = await agent.handleAgentChat(message);
     res.json({ reply });
   } catch (err) {
-    console.error('[AI Chat API Error]', err.message);
-    res.status(500).json({ error: 'AI Agent failed to process', detail: err.message });
+    console.error('[AI Chat API Error]', err);
+    res.status(500).json({ error: 'AI Agent failed to process' });
   }
+});
+
+// 전역 에러 핸들러 — CORS 차단 등 미들웨어 단계에서 발생한 에러가
+// 기본 Express 핸들러를 통해 스택트레이스와 함께 노출되는 것을 방지
+app.use((err, req, res, _next) => {
+  console.error('[Unhandled Error]', err);
+  res.status(err.status || 500).json({ error: '요청을 처리할 수 없습니다.' });
 });
 
 // ================================================================
