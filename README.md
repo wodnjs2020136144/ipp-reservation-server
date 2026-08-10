@@ -47,6 +47,8 @@ cp .env.example .env
 |---|---|---|
 | `GEMINI_API_KEY` | 권장 | Google Gemini API 키. 미설정 시 `/api/chat`이 데모 응답 모드로 동작 |
 | `PORT` | 선택 | 서버 포트 (기본값 4000) |
+| `CRAWL_ALERT_WEBHOOK_URL` | 선택 | 크롤링 실패 시 알림을 보낼 webhook URL(Slack Incoming Webhook 등) |
+| `SWAGGER_UI_ENABLED` | 선택 | `false`로 설정 시 `/api-docs` 비활성화 (기본값 true) |
 | `CORS_ALLOWED_ORIGINS` | 선택 | 브라우저 기반 클라이언트에 허용할 origin 목록(쉼표 구분). 모바일 앱은 영향받지 않음 |
 
 ### 로컬 실행
@@ -107,13 +109,10 @@ node-cron 10분 간격          │ db.js
 | 포트 하드코딩 | `index.js` | `process.env.PORT`로 오버라이드 가능하게 변경(기본값 4000 유지) |
 | `.env.example` 부재 | - | 작성 완료 |
 | 크롤링 실패 알림/동시 실행 방지 부재 | `crawler.js` | `crawlAll()`에 in-memory 락 추가(크론-warmup 겹침 방지), 실패 요약 로그 및 `CRAWL_ALERT_WEBHOOK_URL`(선택) webhook 알림 지원 |
-
-### 남은 이슈
-| 심각도 | 항목 | 위치 |
-|---|---|---|
-| 낮음 | 재시도 횟수·타임아웃·크론 스케줄 등 매직넘버가 코드에 흩어져 있음 | `crawler.js` 다수 |
-| 낮음 | `nowKST()` 함수가 `index.js`, `crawler.js`에 중복 정의됨 | `index.js:31`, `crawler.js:30` |
-| 낮음 | `package.json`의 `allowScripts`에 이미 제거된 `puppeteer` 항목이 잔재로 남아있음 | `package.json:25-28` |
-| 낮음 | Swagger UI가 프로덕션 환경에서도 항상 공개되어 있음 | `index.js:29` |
+| 매직넘버, `nowKST()` 중복 정의 | `crawler.js`, `index.js`, `agent.js` | `time.js`로 `nowKST()` 통합, 재시도/타임아웃/크론 스케줄/예약 오픈 시각을 이름 있는 상수로 분리 |
+| `puppeteer` allowScripts 잔재 | `package.json` | 제거, `better-sqlite3`/`@scarf/scarf` 버전을 실제 설치 버전으로 정정 |
+| Swagger UI 상시 노출 | `index.js` | `SWAGGER_UI_ENABLED=false`로 끌 수 있도록 옵션화(기본값은 기존과 동일하게 활성화) |
 
 확인 결과 문제가 없는 항목: SQL 쿼리는 전부 파라미터 바인딩 사용(SQL 인젝션 없음), git 히스토리에 시크릿 커밋 이력 없음, Dockerfile에 시크릿 하드코딩 없음.
+
+이로써 코드 리뷰에서 발견된 항목이 모두 해결되었습니다.
