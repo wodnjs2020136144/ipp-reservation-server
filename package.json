@@ -24,7 +24,7 @@
     "@flydotio/dockerfile": "^0.7.10"
   },
   "allowScripts": {
-    "better-sqlite3@13.0.1": true,
-    "puppeteer@24.11.2": true
+    "better-sqlite3@11.10.0": true,
+    "@scarf/scarf@1.4.0": true
   }
 }

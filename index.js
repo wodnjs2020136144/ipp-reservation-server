@@ -3,21 +3,16 @@ const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const cron = require('node-cron');
-const dayjs = require('dayjs');
-const utc = require('dayjs/plugin/utc');
-const timezone = require('dayjs/plugin/timezone');
 
 const db = require('./db');
 const crawler = require('./crawler');
 const agent = require('./agent');
+const { nowKST } = require('./time');
 
 const swaggerUi = require('swagger-ui-express');
 const YAML = require('yamljs');
 const path = require('path');
 const swaggerDocument = YAML.load(path.join(__dirname, 'openapi.yaml'));
-
-dayjs.extend(utc);
-dayjs.extend(timezone);
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -56,17 +51,18 @@ const chatLimiter = rateLimit({
 });
 
 // Swagger UI 문서 라우팅 등록
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-
-const nowKST = () => dayjs().tz('Asia/Seoul');
+// SWAGGER_UI_ENABLED=false로 끌 수 있음 (미설정 시 기존과 동일하게 항상 활성화)
+if (process.env.SWAGGER_UI_ENABLED !== 'false') {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+}
 
 // ================================================================
 // Background Scheduler Setup (node-cron)
 // ================================================================
 
-// 10분마다 크롤러 백그라운드 실행 (매일 09:00 ~ 18:00 KST 활성화)
-// Cron: 매 10분마다, 9시부터 18시 사이에 작동
-cron.schedule('*/10 9-18 * * *', async () => {
+// 10분마다, 9시부터 18시 사이(KST)에 크롤러 백그라운드 실행
+const CRAWL_CRON_SCHEDULE = '*/10 9-18 * * *';
+cron.schedule(CRAWL_CRON_SCHEDULE, async () => {
   console.log('[Scheduler] 주기적 크롤링 스케줄 동작 중...');
   await crawler.crawlAll();
 }, {

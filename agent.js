@@ -3,12 +3,7 @@ require('dotenv').config();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const db = require('./db');
 const crawler = require('./crawler');
-const dayjs = require('dayjs');
-const utc = require('dayjs/plugin/utc');
-const timezone = require('dayjs/plugin/timezone');
-
-dayjs.extend(utc);
-dayjs.extend(timezone);
+const { nowKST } = require('./time');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -44,7 +39,7 @@ const getAllReservationsTool = {
 // 도구 실행 맵러
 const functions = {
   getReservations: ({ type }) => {
-    const today = dayjs().tz('Asia/Seoul').format('YYYY-MM-DD');
+    const today = nowKST().format('YYYY-MM-DD');
     let data = db.getReservations(type, today);
     if (!data || data.length === 0) {
       // 캐시가 비어있으면 백필
@@ -55,7 +50,7 @@ const functions = {
     return data;
   },
   getAllReservations: async () => {
-    const today = dayjs().tz('Asia/Seoul').format('YYYY-MM-DD');
+    const today = nowKST().format('YYYY-MM-DD');
     let data = db.getReservationsAll(today);
     const ippEmpty = Object.values(data.ipp).every(arr => arr.length === 0);
     const commentatorEmpty = Object.values(data.commentator).every(arr => arr.length === 0);
@@ -82,7 +77,7 @@ async function handleAgentChat(userMessage) {
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.0-flash',
       systemInstruction: `당신은 충청남도교육청 과학교육원의 체험/가이드 예약을 지원하는 AI 예약 비서 에이전트입니다.
-      - 오늘 날짜는 ${dayjs().tz('Asia/Seoul').format('YYYY년 MM월 DD일')} 이며 요일은 ${['일', '월', '화', '수', '목', '금', '토'][dayjs().tz('Asia/Seoul').day()]}요일입니다.
+      - 오늘 날짜는 ${nowKST().format('YYYY년 MM월 DD일')} 이며 요일은 ${['일', '월', '화', '수', '목', '금', '토'][nowKST().day()]}요일입니다.
       - 사용자의 질문에서 예약 관련 정보를 가져와야 하는 경우, 반드시 적절한 도구(getReservations 또는 getAllReservations)를 호출하십시오.
       - 도구를 실행해 얻은 JSON 응답을 분석하여 친절하고 가독성 좋은 한국어 자연어로 답하십시오.
       - 마감된 회차에 대해서는 잔여석을 '마감됨'으로 안내하되, 융통성 있게 답하세요.

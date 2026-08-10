@@ -2,15 +2,18 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const dayjs = require('dayjs');
-const utc = require('dayjs/plugin/utc');
-const timezone = require('dayjs/plugin/timezone');
 const db = require('./db');
+const { nowKST } = require('./time');
 
-dayjs.extend(utc);
-dayjs.extend(timezone);
+// 크롤링 관련 튜닝 값 (매직넘버를 이름 있는 상수로 분리)
+const REQUEST_TIMEOUT_MS = 60000;
+const MAX_RETRY = 3;
+const RETRY_BACKOFF_STEP_MS = 1000; // i번째 재시도 시 RETRY_BACKOFF_STEP_MS * i 만큼 대기
+const MORNING_OPEN_HOUR = 9;  // 오전 회차 예약 오픈 시각
+const AFTERNOON_OPEN_HOUR = 12; // 오후 회차 예약 오픈 시각
 
 const axiosClient = axios.create({
-  timeout: 60000,
+  timeout: REQUEST_TIMEOUT_MS,
   headers: {
     'User-Agent':
       'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
@@ -27,22 +30,20 @@ const reservationMap = {
   robot: 'https://www.cnse.or.kr/main/reserve/guide_calendar.action?q=cbc435e029c9390985c5e31542b88464a21905bdc4584bb7549414974b78147a',
 };
 
-const nowKST = () => dayjs().tz('Asia/Seoul');
-
 function getPreReservationStatus(slotTimeStr, now) {
   const slotHour = parseInt(slotTimeStr.split(':')[0], 10);
   const todayDateStr = now.format('YYYY-MM-DD');
-  const morningOpen = dayjs.tz(`${todayDateStr} 09:00`, 'Asia/Seoul');
-  const afternoonOpen = dayjs.tz(`${todayDateStr} 12:00`, 'Asia/Seoul');
+  const morningOpen = dayjs.tz(`${todayDateStr} ${String(MORNING_OPEN_HOUR).padStart(2, '0')}:00`, 'Asia/Seoul');
+  const afternoonOpen = dayjs.tz(`${todayDateStr} ${String(AFTERNOON_OPEN_HOUR).padStart(2, '0')}:00`, 'Asia/Seoul');
 
-  if (slotHour < 12) {
+  if (slotHour < AFTERNOON_OPEN_HOUR) {
     return now.isBefore(morningOpen) ? '예약대기' : '예약가능';
   } else {
     return now.isBefore(afternoonOpen) ? '예약대기' : '예약가능';
   }
 }
 
-async function fetchHtmlWithRetry(url, maxRetry = 3) {
+async function fetchHtmlWithRetry(url, maxRetry = MAX_RETRY) {
   let lastErr;
   for (let i = 0; i < maxRetry; i++) {
     try {
@@ -50,7 +51,7 @@ async function fetchHtmlWithRetry(url, maxRetry = 3) {
     } catch (err) {
       lastErr = err;
       console.warn('[retry]', i + 1, 'fail', err.code || err.message);
-      await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+      await new Promise(r => setTimeout(r, RETRY_BACKOFF_STEP_MS * (i + 1)));
     }
   }
   throw lastErr;
