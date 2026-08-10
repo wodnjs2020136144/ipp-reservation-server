@@ -106,11 +106,11 @@ node-cron 10분 간격          │ db.js
 | `express.json()` body size limit 미지정 | `index.js` | `limit: '100kb'` 명시 |
 | 포트 하드코딩 | `index.js` | `process.env.PORT`로 오버라이드 가능하게 변경(기본값 4000 유지) |
 | `.env.example` 부재 | - | 작성 완료 |
+| 크롤링 실패 알림/동시 실행 방지 부재 | `crawler.js` | `crawlAll()`에 in-memory 락 추가(크론-warmup 겹침 방지), 실패 요약 로그 및 `CRAWL_ALERT_WEBHOOK_URL`(선택) webhook 알림 지원 |
 
 ### 남은 이슈
 | 심각도 | 항목 | 위치 |
 |---|---|---|
-| 중간 | 크롤링 실패 시 로그만 남기고 별도 알림(Slack/이메일 등) 체계가 없음. 크론과 기동 warm-up이 겹칠 때 동시 실행을 막는 락도 없음 | `crawler.js:211-221`, `index.js:39,136` |
 | 낮음 | 재시도 횟수·타임아웃·크론 스케줄 등 매직넘버가 코드에 흩어져 있음 | `crawler.js` 다수 |
 | 낮음 | `nowKST()` 함수가 `index.js`, `crawler.js`에 중복 정의됨 | `index.js:31`, `crawler.js:30` |
 | 낮음 | `package.json`의 `allowScripts`에 이미 제거된 `puppeteer` 항목이 잔재로 남아있음 | `package.json:25-28` |
