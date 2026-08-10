@@ -38,13 +38,16 @@ npm install
 ```
 
 ### 환경변수
-`.env` 파일을 프로젝트 루트에 생성하고 아래 값을 설정합니다.
+`.env.example`을 복사해 `.env`를 만들고 값을 채웁니다.
+```bash
+cp .env.example .env
+```
 
 | 변수명 | 필수 | 설명 |
 |---|---|---|
 | `GEMINI_API_KEY` | 권장 | Google Gemini API 키. 미설정 시 `/api/chat`이 데모 응답 모드로 동작 |
-
-> `.env.example` 파일이 현재 리포지토리에 없습니다. 위 표를 참고해 직접 `.env`를 생성하세요.
+| `PORT` | 선택 | 서버 포트 (기본값 4000) |
+| `CORS_ALLOWED_ORIGINS` | 선택 | 브라우저 기반 클라이언트에 허용할 origin 목록(쉼표 구분). 모바일 앱은 영향받지 않음 |
 
 ### 로컬 실행
 ```bash
@@ -92,17 +95,22 @@ node-cron 10분 간격          │ db.js
 
 ## 알려진 이슈 및 개선 필요 사항
 
-코드 리뷰를 통해 확인된 항목입니다. 아직 수정되지 않은 상태이며, 우선순위 판단 및 추후 개별 작업의 참고용으로 남겨둡니다.
+코드 리뷰를 통해 확인된 항목입니다. 보안 우선 개선 로드맵에 따라 순차적으로 해결 중입니다.
 
+### 해결 완료
+| 항목 | 위치 | 조치 |
+|---|---|---|
+| CORS 전체 오픈 | `index.js` | origin 화이트리스트 적용(`CORS_ALLOWED_ORIGINS`) |
+| `/api/chat` rate limit 부재 | `index.js`, `agent.js` | `express-rate-limit` 적용(분당 10회) |
+| 에러 응답에 `err.message` 노출 | `index.js`, `agent.js` | 일반화된 메시지로 대체, 상세는 서버 로그에만 기록 |
+| `express.json()` body size limit 미지정 | `index.js` | `limit: '100kb'` 명시 |
+| 포트 하드코딩 | `index.js` | `process.env.PORT`로 오버라이드 가능하게 변경(기본값 4000 유지) |
+| `.env.example` 부재 | - | 작성 완료 |
+
+### 남은 이슈
 | 심각도 | 항목 | 위치 |
 |---|---|---|
-| 높음 | CORS가 origin 제한 없이 전체 오픈되어 있음 | `index.js:25` |
-| 높음 | `/api/chat`에 rate limit이 없고 사용자 입력이 검증 없이 Gemini에 그대로 전달됨(프롬프트 인젝션 가능성, 반복 호출 시 크롤링 폭주 및 API 과금 리스크) | `index.js:118`, `agent.js:76-94` |
-| 중간 | 에러 응답에 `err.message`가 그대로 노출되어 내부 구현 정보가 유출될 수 있음 | `index.js:76,104,129`, `agent.js:129` |
-| 중간 | 포트(4000)가 `Dockerfile`/`fly.toml`/`index.js` 세 곳에 각각 하드코딩되어 있음 | `index.js:22` |
-| 중간 | `.env.example` 파일이 없어 온보딩 시 필요한 환경변수를 코드에서 직접 찾아야 함 | - |
 | 중간 | 크롤링 실패 시 로그만 남기고 별도 알림(Slack/이메일 등) 체계가 없음. 크론과 기동 warm-up이 겹칠 때 동시 실행을 막는 락도 없음 | `crawler.js:211-221`, `index.js:39,136` |
-| 낮음 | `express.json()`에 명시적 body size limit이 지정되어 있지 않음 | `index.js:26` |
 | 낮음 | 재시도 횟수·타임아웃·크론 스케줄 등 매직넘버가 코드에 흩어져 있음 | `crawler.js` 다수 |
 | 낮음 | `nowKST()` 함수가 `index.js`, `crawler.js`에 중복 정의됨 | `index.js:31`, `crawler.js:30` |
 | 낮음 | `package.json`의 `allowScripts`에 이미 제거된 `puppeteer` 항목이 잔재로 남아있음 | `package.json:25-28` |

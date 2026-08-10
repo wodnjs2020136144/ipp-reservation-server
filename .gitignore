@@ -17,9 +17,10 @@ pids/
 *.pid.lock
 
 # --- Environment variables ---
+# .env.example은 버전관리 대상으로 남겨둠 (gitignore는 인라인 주석을 지원하지 않으므로 별도 줄로 분리)
 .env
 .env.*
-!.env.example          # keep example template under version control
+!.env.example
 
 # --- Build outputs & coverage ---
 dist/
