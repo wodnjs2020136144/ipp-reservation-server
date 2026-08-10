@@ -205,19 +205,58 @@ async function crawlAndSave(type) {
   }
 }
 
+// 크론 스케줄과 서버 기동 warm-up이 겹칠 경우 동시 실행을 막기 위한 락
+let isCrawlAllRunning = false;
+
+// 크롤링 실패 알림용 webhook (Slack Incoming Webhook 등). 미설정 시 알림 없이 로그만 남김
+const CRAWL_ALERT_WEBHOOK_URL = process.env.CRAWL_ALERT_WEBHOOK_URL;
+
+async function notifyCrawlFailures(failedTypes) {
+  if (!CRAWL_ALERT_WEBHOOK_URL || failedTypes.length === 0) return;
+  try {
+    await axiosClient.post(CRAWL_ALERT_WEBHOOK_URL, {
+      text: `[ipp-reservation-server] 크롤링 실패: ${failedTypes.join(', ')} (${nowKST().format('YYYY-MM-DD HH:mm:ss')})`
+    });
+  } catch (err) {
+    console.error('[Crawl Alert] webhook 전송 실패:', err.message);
+  }
+}
+
 /**
- * 모든 타입에 대해 순차적/병렬적 크롤링 수행
+ * 모든 타입에 대해 순차적으로 크롤링 수행.
+ * 이미 실행 중이면(크론과 warm-up 겹침 등) 건너뜀.
  */
 async function crawlAll() {
-  const types = Object.keys(reservationMap);
-  console.log(`[Scheduler] Starting batch crawl at ${nowKST().format('YYYY-MM-DD HH:mm:ss')}`);
-  for (const type of types) {
-    try {
-      await crawlAndSave(type);
-    } catch (err) {
-      console.error(`[Crawl Error] Failed to crawl ${type}:`, err.message);
-    }
+  if (isCrawlAllRunning) {
+    console.log('[Scheduler] 이전 크롤링이 아직 실행 중이라 이번 실행은 건너뜁니다.');
+    return;
   }
+
+  isCrawlAllRunning = true;
+  const types = Object.keys(reservationMap);
+  const failedTypes = [];
+  console.log(`[Scheduler] Starting batch crawl at ${nowKST().format('YYYY-MM-DD HH:mm:ss')}`);
+
+  try {
+    for (const type of types) {
+      try {
+        await crawlAndSave(type);
+      } catch (err) {
+        console.error(`[Crawl Error] Failed to crawl ${type}:`, err.message);
+        failedTypes.push(type);
+      }
+    }
+  } finally {
+    isCrawlAllRunning = false;
+  }
+
+  console.log(
+    failedTypes.length === 0
+      ? `[Scheduler] Batch crawl 완료: ${types.length}개 전체 성공`
+      : `[Scheduler] Batch crawl 완료: ${types.length - failedTypes.length}/${types.length}개 성공, 실패: ${failedTypes.join(', ')}`
+  );
+
+  await notifyCrawlFailures(failedTypes);
 }
 
 module.exports = {
