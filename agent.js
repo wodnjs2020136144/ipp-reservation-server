@@ -36,18 +36,29 @@ const getAllReservationsTool = {
   }
 };
 
+// DB의 available은 '신청 인원'이고 '예약대기'는 '예약 오픈 전'이라, 모델이 잔여석/대기자로 오해하지 않도록 풀어서 전달
+const toSeatInfo = (slots) => (slots || []).map(({ time, status, available, total }) => ({
+  time,
+  status: status === '예약대기' ? '예약 오픈 전' : status,
+  booked: available,
+  remaining: available != null && total != null ? Math.max(total - available, 0) : null,
+  total
+}));
+const toSeatInfoGroup = (group) =>
+  Object.fromEntries(Object.entries(group).map(([key, slots]) => [key, toSeatInfo(slots)]));
+
 // 도구 실행 맵러
 const functions = {
-  getReservations: ({ type }) => {
+  getReservations: async ({ type }) => {
     const today = nowKST().format('YYYY-MM-DD');
     let data = db.getReservations(type, today);
     if (!data || data.length === 0) {
       // 캐시가 비어있으면 백필
-      return crawler.crawlAndSave(type)
+      data = await crawler.crawlAndSave(type)
         .then(() => db.getReservations(type, today))
         .catch(() => []);
     }
-    return data;
+    return toSeatInfo(data);
   },
   getAllReservations: async () => {
     const today = nowKST().format('YYYY-MM-DD');
@@ -59,7 +70,7 @@ const functions = {
       await crawler.crawlAll();
       data = db.getReservationsAll(today);
     }
-    return data;
+    return { ipp: toSeatInfoGroup(data.ipp), commentator: toSeatInfoGroup(data.commentator) };
   }
 };
 
