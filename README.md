@@ -10,7 +10,7 @@
 - **웹 프레임워크**: Express 5
 - **DB**: SQLite (`better-sqlite3`, WAL 모드)
 - **크롤링**: axios + cheerio (`node-cron`으로 주기 실행)
-- **AI**: Google Gemini (`@google/generative-ai`, `gemini-2.0-flash`, function calling)
+- **AI**: Google Gemini (`@google/genai`, `gemini-3.6-flash`, function calling)
 - **API 문서**: OpenAPI(`openapi.yaml`) + Swagger UI
 - **배포**: fly.io (Dockerfile, GitHub Actions)
 

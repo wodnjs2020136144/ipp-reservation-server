@@ -1,6 +1,6 @@
 // agent.js — Gemini API 기반의 AI 예약 비서 에이전트 모듈
 require('dotenv').config();
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 const db = require('./db');
 const crawler = require('./crawler');
 const { nowKST } = require('./time');
@@ -9,7 +9,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // API 키가 없을 때의 폴백 응답 설정
 const hasApiKey = !!GEMINI_API_KEY;
-const genAI = hasApiKey ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
+const genAI = hasApiKey ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
 
 // AI가 호출할 수 있는 로컬 도구(Tool) 정의
 const getReservationsTool = {
@@ -74,8 +74,9 @@ async function handleAgentChat(userMessage) {
   }
 
   try {
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+    const chat = genAI.chats.create({
+      model: 'gemini-3.6-flash',
+      config: {
       systemInstruction: `당신은 충청남도교육청 과학교육원의 체험/가이드 예약을 지원하는 AI 예약 비서 에이전트입니다.
       - 오늘 날짜는 ${nowKST().format('YYYY년 MM월 DD일')} 이며 요일은 ${['일', '월', '화', '수', '목', '금', '토'][nowKST().day()]}요일입니다.
       - 사용자의 질문에서 예약 관련 정보를 가져와야 하는 경우, 반드시 적절한 도구(getReservations 또는 getAllReservations)를 호출하십시오.
@@ -83,11 +84,10 @@ async function handleAgentChat(userMessage) {
       - 마감된 회차에 대해서는 잔여석을 '마감됨'으로 안내하되, 융통성 있게 답하세요.
       - 시간 체크 및 휴무일 조건: 매주 월요일은 휴관이며, 지진 VR의 경우 일요일에는 운영되지 않습니다.`,
       tools: [{ functionDeclarations: [getReservationsTool, getAllReservationsTool] }]
+      }
     });
 
-    const chat = model.startChat();
-    let result = await chat.sendMessage(userMessage);
-    const response = result.response;
+    const response = await chat.sendMessage({ message: userMessage });
 
     // 도구 호출(Function Calling)이 발생했는지 확인
     const functionCalls = response.functionCalls;
@@ -108,17 +108,19 @@ async function handleAgentChat(userMessage) {
       }
 
       // 도구 실행 결과를 다시 LLM에게 전달하여 최종 답변 완성
-      const secondResult = await chat.sendMessage([{
-        functionResponse: {
-          name: fnName,
-          response: { content: fnResult }
-        }
-      }]);
+      const secondResult = await chat.sendMessage({
+        message: [{
+          functionResponse: {
+            name: fnName,
+            response: { content: fnResult }
+          }
+        }]
+      });
 
-      return secondResult.response.text();
+      return secondResult.text;
     }
 
-    return response.text();
+    return response.text;
   } catch (error) {
     console.error('[AI Agent Error]', error);
     return 'AI 예약 비서 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
