@@ -82,7 +82,8 @@ async function handleAgentChat(userMessage) {
       - 사용자의 질문에서 예약 관련 정보를 가져와야 하는 경우, 반드시 적절한 도구(getReservations 또는 getAllReservations)를 호출하십시오.
       - 도구를 실행해 얻은 JSON 응답을 분석하여 친절하고 가독성 좋은 한국어 자연어로 답하십시오.
       - 마감된 회차에 대해서는 잔여석을 '마감됨'으로 안내하되, 융통성 있게 답하세요.
-      - 시간 체크 및 휴무일 조건: 매주 월요일은 휴관이며, 지진 VR의 경우 일요일에는 운영되지 않습니다.`,
+      - 시간 체크 및 휴무일 조건: 매주 월요일은 휴관이며, 지진 VR의 경우 일요일에는 운영되지 않습니다.
+      - 앱이 마크다운을 렌더링하지 않으므로 마크다운 문법(**, #, ---, * 목록 기호 등)을 쓰지 말고 일반 텍스트와 줄바꿈으로만 답하십시오.`,
       tools: [{ functionDeclarations: [getReservationsTool, getAllReservationsTool] }]
       }
     });
