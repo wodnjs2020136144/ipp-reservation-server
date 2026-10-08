@@ -116,12 +116,3 @@ node-cron 10분 간격          │ db.js
 확인 결과 문제가 없는 항목: SQL 쿼리는 전부 파라미터 바인딩 사용(SQL 인젝션 없음), git 히스토리에 시크릿 커밋 이력 없음, Dockerfile에 시크릿 하드코딩 없음.
 
 이로써 코드 리뷰에서 발견된 항목이 모두 해결되었습니다.
-
-### 운영 중 발견되어 해결 (2026-10)
-| 항목 | 위치 | 조치 |
-|---|---|---|
-| `/api/chat`이 항상 오류 문구 반환 (`gemini-2.0-flash` 2026-06-01 종료) | `agent.js` | `gemini-3.6-flash`로 교체 |
-| 도구(function calling)가 실행되지 않음 | `agent.js` | 구 SDK에서 메서드인 `response.functionCalls`를 속성으로 읽던 문제. SDK 이전으로 해소 |
-| 구 SDK `@google/generative-ai`가 Gemini 3에서 400(`Role 'function' is not supported`) | `agent.js`, `package.json` | `@google/genai`로 이전. 이 SDK가 Node 20 이상을 요구해 런타임을 Node 22로 상향(`Dockerfile`, `engines`) |
-| 답변의 마크다운(`**`, `###`)이 앱에 그대로 노출 | `agent.js` | 시스템 프롬프트에서 일반 텍스트 답변 요청 |
-| 신청 인원(`available`)을 잔여석으로, `예약대기`(오픈 전)를 대기자 상태로 오해해 빈 회차를 '마감'으로 안내 | `agent.js` | 도구 결과를 `booked`/`remaining`/`total`과 `예약 오픈 전` 상태로 변환해 전달 (API 응답은 변경 없음) |
