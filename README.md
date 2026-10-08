@@ -71,9 +71,3 @@ node-cron 10분 간격          │ db.js
               GET /api/reservations(/all)
               POST /api/chat → Gemini function calling → 동일 DAO 조회 → 자연어 응답
 ```
-
-## 배포
-
-- `main` 브랜치에 push하면 GitHub Actions(`.github/workflows/fly-deploy.yml`)가 fly.io에 자동 배포합니다.
-- `GEMINI_API_KEY`는 fly.io secrets로 등록합니다: `flyctl secrets set GEMINI_API_KEY=...`
-- SQLite는 볼륨 없이 동작해 머신 재시작 시 초기화되고, 기동 시 크롤링으로 다시 채워집니다.
